@@ -1,0 +1,276 @@
+@import "tailwindcss";
+
+/* ── SmartBiz Design Tokens ──────────────────────────────────────────── */
+@theme {
+  /* Colors — Teal primary palette (from smartbiz_global_shell_teal Stitch export) */
+  --color-primary: #006a67;
+  --color-primary-container: #00CEC8;
+  --color-on-primary: #ffffff;
+  --color-on-primary-fixed: #00201f;
+  --color-on-primary-fixed-variant: #00504d;
+  --color-primary-fixed: #5af9f2;
+  --color-primary-fixed-dim: #2edcd6;
+  --color-inverse-primary: #2edcd6;
+
+  --color-secondary: #565e74;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #dae2fd;
+  --color-on-secondary-container: #5c647a;
+  --color-secondary-fixed: #dae2fd;
+  --color-secondary-fixed-dim: #bec6e0;
+  --color-on-secondary-fixed: #131b2e;
+  --color-on-secondary-fixed-variant: #3f465c;
+
+  --color-tertiary: #006591;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #61c2ff;
+  --color-on-tertiary-container: #004e72;
+  --color-tertiary-fixed: #c9e6ff;
+  --color-tertiary-fixed-dim: #89ceff;
+  --color-on-tertiary-fixed: #001e2f;
+  --color-on-tertiary-fixed-variant: #004c6e;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-background: #f8f9ff;
+  --color-on-background: #0b1c30;
+  --color-surface: #f8f9ff;
+  --color-on-surface: #0b1c30;
+  --color-surface-variant: #d3e4fe;
+  --color-on-surface-variant: #3b4948;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-inverse-surface: #213145;
+  --color-inverse-on-surface: #eaf1ff;
+
+  --color-outline: #6b7a79;
+  --color-outline-variant: #bacac8;
+
+  --color-surface-tint: #006a67;
+
+  /* Status colors (semantic — used sparingly) */
+  --color-status-success: #166534;
+  --color-status-success-bg: #dcfce7;
+  --color-status-success-dot: #16a34a;
+  --color-status-warning: #92400e;
+  --color-status-warning-bg: #fef3c7;
+  --color-status-warning-dot: #d97706;
+  --color-status-danger: #991b1b;
+  --color-status-danger-bg: #fee2e2;
+  --color-status-danger-dot: #dc2626;
+  --color-status-info: #1e40af;
+  --color-status-info-bg: #dbeafe;
+  --color-status-info-dot: #2563eb;
+
+  /* Spacing
+     NOTE: do not add --spacing-xs/sm/md/lg/xl here. Tailwind v4 resolves
+     max-w-xs, max-w-lg, etc. against --spacing-* keys, so defining them
+     turns every max-w-lg in the app into 24px. The size-step tokens live
+     as plain CSS variables (--space-*) in :root below instead. */
+  --spacing-gutter: 24px;
+  --spacing-container-max: 1280px;
+
+  /* Border Radius */
+  --radius-DEFAULT: 4px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --text-display: 48px;
+  --text-display--line-height: 56px;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 700;
+
+  --text-h1: 32px;
+  --text-h1--line-height: 40px;
+  --text-h1--letter-spacing: -0.01em;
+  --text-h1--font-weight: 600;
+
+  --text-h2: 24px;
+  --text-h2--line-height: 32px;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 18px;
+  --text-h3--line-height: 26px;
+  --text-h3--font-weight: 600;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 400;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 400;
+
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 20px;
+  --text-body-sm--font-weight: 400;
+
+  --text-label-md: 12px;
+  --text-label-md--line-height: 16px;
+  --text-label-md--letter-spacing: 0.01em;
+  --text-label-md--font-weight: 500;
+
+  --text-code: 13px;
+  --text-code--line-height: 20px;
+  --text-code--font-weight: 400;
+}
+
+/* Design-token spacing steps (usable as var(--space-md) in custom CSS) */
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+}
+
+
+
+/* ── Base ────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #f3f6fb;
+  color: var(--color-on-surface);
+  margin: 0;
+}
+
+/* ── Premium application surface ───────────────────────────────────── */
+body {
+  background-image:
+    radial-gradient(circle at 82% -10%, rgba(0, 206, 200, .09), transparent 30rem),
+    linear-gradient(180deg, #f7f9fc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+}
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button, a { transition-duration: 180ms; }
+
+.premium-panel {
+  background: rgba(255,255,255,.88);
+  border: 1px solid rgba(203,213,225,.78);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.03), 0 12px 34px rgba(15,23,42,.045);
+  backdrop-filter: blur(14px);
+}
+
+.metric-glow { position: relative; overflow: hidden; }
+.metric-glow::after {
+  content: '';
+  position: absolute;
+  width: 120px; height: 120px; border-radius: 999px;
+  right: -55px; top: -70px;
+  background: rgba(0,206,200,.12);
+  filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* `backwards` (not `both`): a lingering transform after the animation would make
+     <main> the containing block for position:fixed overlays and break every modal. */
+  .page-content-enter { animation: page-in .32s cubic-bezier(.22,.8,.3,1) backwards; }
+  @keyframes page-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+}
+
+/* ── Material Symbols ────────────────────────────────────────────────── */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.material-symbols-outlined.filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
+
+/* ── Focus ───────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: 2px;
+}
+
+/* ── Form inputs ─────────────────────────────────────────────────────── */
+input, textarea, select {
+  font-family: var(--font-sans);
+}
+
+/* ── Utility: status badges ──────────────────────────────────────────── */
+.badge-paid    { background: var(--color-status-success-bg); color: var(--color-status-success); }
+.badge-pending { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
+.badge-overdue { background: var(--color-status-danger-bg);  color: var(--color-status-danger);  }
+.badge-info    { background: var(--color-status-info-bg);    color: var(--color-status-info);    }
+
+/* ── Sidebar nav active state ─────────────────────────────────────────── */
+.nav-item-active {
+  background-color: var(--color-surface-container-high);
+  color: var(--color-primary);
+  font-weight: 600;
+  border-right: 2px solid var(--color-primary-container);
+}
+
+/* ── Page layout helpers ─────────────────────────────────────────────── */
+.page-header {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.page-content {
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+/* ── Receipt printing ────────────────────────────────────────────────── */
+/* When a .print-receipt exists on the page, print only it (80mm thermal width). */
+@media print {
+  body:has(.print-receipt) > * { visibility: hidden !important; }
+  body:has(.print-receipt) .print-receipt,
+  body:has(.print-receipt) .print-receipt * { visibility: visible !important; }
+  body:has(.print-receipt) .print-receipt {
+    position: fixed; top: 0; left: 0;
+    width: 80mm; max-width: 80mm; margin: 0; padding: 4mm;
+    background: #fff; color: #000; box-shadow: none;
+  }
+  @page { margin: 0; }
+}
