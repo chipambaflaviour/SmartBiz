@@ -9,7 +9,6 @@ import RouteErrorPage from '@/shared/components/RouteErrorPage'
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('@/modules/auth/LoginPage'))
-const SignupPage = lazy(() => import('@/modules/auth/SignupPage'))
 const ForgotPasswordPage = lazy(() => import('@/modules/auth/ForgotPasswordPage'))
 const OrgSelectPage = lazy(() => import('@/modules/auth/OrgSelectPage'))
 const AcceptInvitePage = lazy(() => import('@/modules/auth/AcceptInvitePage'))
@@ -34,6 +33,7 @@ const OrganizationSettingsPage = lazy(() => import('@/modules/settings/Organizat
 const ApprovalsInboxPage = lazy(() => import('@/modules/approvals/ApprovalsInboxPage'))
 const ModulesPage = lazy(() => import('@/modules/settings/ModulesPage'))
 const ControlCenterPage = lazy(() => import('@/modules/platform/ControlCenterPage'))
+const VatSummaryPage = lazy(() => import('@/modules/finance/VatSummaryPage'))
 
 function PageLoader() {
   return (
@@ -59,7 +59,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/auth/login" replace /> },
       { path: 'login', element: <Suspense fallback={<PageLoader />}><LoginPage /></Suspense> },
-      { path: 'signup', element: <Suspense fallback={<PageLoader />}><SignupPage /></Suspense> },
+      { path: 'signup', element: <Navigate to="/auth/login" replace /> },
       { path: 'forgot-password', element: <Suspense fallback={<PageLoader />}><ForgotPasswordPage /></Suspense> },
       { path: 'org-select', element: <Suspense fallback={<PageLoader />}><OrgSelectPage /></Suspense> },
       { path: 'accept-invite', element: <Suspense fallback={<PageLoader />}><AcceptInvitePage /></Suspense> },
@@ -179,6 +179,7 @@ export const router = createBrowserRouter([
             path: 'aging',
             element: <Suspense fallback={<PageLoader />}><ComingSoonPage module="AR Aging Report" /></Suspense>,
           },
+          { path: 'vat-summary', element: <Suspense fallback={<PageLoader />}><VatSummaryPage /></Suspense> },
         ],
       },
 

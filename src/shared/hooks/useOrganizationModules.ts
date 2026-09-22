@@ -13,26 +13,34 @@ export function useOrganizationModules() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
   const userId = useAppStore((s) => s.currentUser?.id)
   const isPlatformAdmin = useAppStore((s) => s.isPlatformAdmin)
+  const branchId = useAppStore((s) => s.activeBranchId)
 
   return useQuery({
     // Keyed by user too: switching accounts in the same browser must never reuse another user's access list
-    queryKey: ['org-modules', orgId, userId],
+    queryKey: ['org-modules', orgId, userId, branchId],
     queryFn: async () => {
       if (isDemoMode) return DEMO_MODULES
       if (!orgId) return []
-      const [{ data, error }, { data: membership }, { data: userAccess }] = await Promise.all([
+      const [{ data, error }, { data: membership }, { data: userAccess }, { data: branchAccess, error: branchAccessError }] = await Promise.all([
         supabase.from('organization_module').select('module_key, is_enabled').eq('organization_id', orgId),
         supabase.from('user_organization').select('role').eq('organization_id', orgId).eq('user_id', userId!).eq('is_active', true).maybeSingle(),
         supabase.from('user_module_access').select('module_key, can_view').eq('organization_id', orgId).eq('user_id', userId!),
+        branchId
+          ? supabase.from('branch_module_access').select('module_key, is_enabled').eq('organization_id', orgId).eq('branch_id', branchId)
+          : Promise.resolve({ data: null, error: null }),
       ])
 
       if (error) throw error
+      if (branchAccessError) throw branchAccessError
       // Owners/admins and platform super-admins see every module the organization has enabled
       const unrestricted = isPlatformAdmin || membership?.role === 'owner' || membership?.role === 'admin'
       const allowed = new Set((userAccess ?? []).filter((row: { can_view: boolean }) => row.can_view).map((row: { module_key: string }) => row.module_key))
+      const branchEnabled = branchId
+        ? new Set((branchAccess ?? []).filter((row: { is_enabled: boolean }) => row.is_enabled).map((row: { module_key: string }) => row.module_key))
+        : null
       return (data ?? []).map((r: { module_key: string; is_enabled: boolean }) => ({
         moduleKey: r.module_key as ModuleKey,
-        isEnabled: r.is_enabled && (unrestricted || allowed.has(r.module_key)),
+        isEnabled: r.is_enabled && (!branchEnabled || branchEnabled.has(r.module_key)) && (unrestricted || allowed.has(r.module_key)),
       }))
     },
     enabled: !!orgId && !!userId,

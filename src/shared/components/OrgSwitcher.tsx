@@ -38,7 +38,9 @@ export function OrgSwitcher() {
     mutationFn: async (orgId: string) => orgId,
     onSuccess: (orgId) => {
       setActiveOrgId(orgId)
-      queryClient.invalidateQueries()
+      queryClient.invalidateQueries({ queryKey: ['workspace-branches'] })
+      queryClient.invalidateQueries({ queryKey: ['org-info'] })
+      queryClient.invalidateQueries({ queryKey: ['org-modules'] })
       setOpen(false)
     },
   })
@@ -107,16 +109,8 @@ export function OrgSwitcher() {
           })}
         </div>
 
-        {/* Footer actions */}
-        <div className="flex gap-2 px-5 py-3 border-t border-[#e5eeff]">
-          <button className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-[#bacac8] text-[13px] font-medium text-[#3b4948] hover:bg-[#eff4ff] transition-colors">
-            <span className="material-symbols-outlined text-[16px]">add_circle</span>
-            Create New
-          </button>
-          <button className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-[#bacac8] text-[13px] font-medium text-[#3b4948] hover:bg-[#eff4ff] transition-colors">
-            <span className="material-symbols-outlined text-[16px]">key</span>
-            Join via Code
-          </button>
+        <div className="border-t border-[#e5eeff] px-5 py-3 text-[11px] text-[#6b7a79]">
+          Organizations are created in Platform Backoffice. Branches are managed inside each organization workspace.
         </div>
       </div>
     </div>

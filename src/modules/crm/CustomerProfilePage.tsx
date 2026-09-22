@@ -11,13 +11,16 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info'> 
 const METHOD_LABEL: Record<string, string> = { cash: 'Cash', card: 'Card', mobile: 'Mobile money', mobile_money: 'Mobile money', bank_transfer: 'Bank transfer', credit: 'On credit', split: 'Split', invoice: 'Invoice' }
 
 export default function CustomerProfilePage() {
-  const { id } = useParams(); const orgId = useAppStore((s) => s.activeOrganizationId); const navigate = useNavigate()
-  const { data, isLoading } = useQuery({ queryKey: ['customer-profile', orgId, id], queryFn: async () => {
+  const { id } = useParams(); const orgId = useAppStore((s) => s.activeOrganizationId); const activeBranchId = useAppStore((s) => s.activeBranchId); const navigate = useNavigate()
+  const { data, isLoading } = useQuery({ queryKey: ['customer-profile', orgId, activeBranchId, id], queryFn: async () => {
     if (!orgId || !id) return null
+    let invoiceQuery = supabase.from('invoice').select('id,invoice_number,issue_date,total_amount,status,notes').eq('organization_id', orgId).eq('customer_id', id).is('deleted_at', null).order('issue_date', { ascending: false })
+    let saleQuery = supabase.from('sale').select('id,reference_number,sale_date,total_amount,payment_method,payment_status,sale_item(quantity,product(name))').eq('organization_id', orgId).eq('customer_id', id).is('deleted_at', null).order('sale_date', { ascending: false })
+    if (activeBranchId) { invoiceQuery = invoiceQuery.eq('branch_id', activeBranchId); saleQuery = saleQuery.eq('branch_id', activeBranchId) }
     const [customerResult, invoiceResult, saleResult] = await Promise.all([
       supabase.from('customer').select('*').eq('organization_id', orgId).eq('id', id).single(),
-      supabase.from('invoice').select('id,invoice_number,issue_date,total_amount,status,notes').eq('organization_id', orgId).eq('customer_id', id).is('deleted_at', null).order('issue_date', { ascending: false }),
-      supabase.from('sale').select('id,reference_number,sale_date,total_amount,payment_method,payment_status,sale_item(quantity,product(name))').eq('organization_id', orgId).eq('customer_id', id).is('deleted_at', null).order('sale_date', { ascending: false }),
+      invoiceQuery,
+      saleQuery,
     ])
     if (customerResult.error) throw customerResult.error
     type SaleRow = { id: string; reference_number: string; sale_date: string; total_amount: number; payment_method: string | null; payment_status: string; sale_item: Array<{ quantity: number; product: { name: string } | null }> | null }

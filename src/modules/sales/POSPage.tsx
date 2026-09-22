@@ -10,9 +10,7 @@ import { enqueueTransaction } from '@/shared/lib/offlineQueue'
 import { cn } from '@/shared/lib/utils'
 import { isDemoMode } from '@/shared/lib/supabase'; import { DEMO_CUSTOMERS, DEMO_PRODUCTS } from '@/shared/lib/demo'
 import { PaymentDialog, type CompletedSale, type PaymentDetails } from './PaymentDialog'
-
-// VAT is currently disabled. Set to e.g. 0.16 to re-enable a 16% tax line.
-const TAX_RATE = 0
+import { calculateVat, useTaxSettings } from '@/shared/hooks/useTaxSettings'
 
 // UI keys -> values allowed by the sale.payment_method CHECK constraint
 // (blueprint_alignment.sql: 'cash','card','bank_transfer','mobile_money','credit','split')
@@ -26,6 +24,7 @@ function isNetworkError(error: { message?: string } | null | undefined) {
 
 export default function POSPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const currentUser = useAppStore((s) => s.currentUser)
   const { items, addItem, removeItem, updateQty, clearCart, discount, setDiscount } = usePOSStore()
   const [search, setSearch] = useState('')
@@ -34,6 +33,7 @@ export default function POSPage() {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const { data: taxSettings = { vatEnabled: false, vatRate: 16, pricesIncludeVat: true, taxNumber: '' } } = useTaxSettings()
 
   const { data: customers = [] } = useQuery({
     queryKey: ['pos-customers', orgId],
@@ -61,19 +61,19 @@ export default function POSPage() {
 
   // Products
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products', orgId],
+    queryKey: ['products', orgId, activeBranchId],
     queryFn: async () => {
       if (isDemoMode) return DEMO_PRODUCTS
       if (!orgId) return []
       const { data } = await supabase
         .from('product')
-        .select('id, sku, name, unit_price, image_url, category_id, product_category(name), stock_level(quantity)')
+        .select('id, sku, name, unit_price, image_url, category_id, product_category(name), stock_level(id,quantity,warehouse(branch_id))')
         .eq('organization_id', orgId)
         .eq('is_active', true)
         .is('deleted_at', null)
       return data ?? []
     },
-    enabled: !!orgId,
+    enabled: !!orgId && !!activeBranchId,
   })
 
   // Categories
@@ -98,13 +98,16 @@ export default function POSPage() {
   // Cart totals
   const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const discountAmt = subtotal * (discount / 100)
-  const taxAmt = (subtotal - discountAmt) * TAX_RATE
-  const total = subtotal - discountAmt + taxAmt
+  const discountedAmount = subtotal - discountAmt
+  const taxCalculation = calculateVat(discountedAmount, taxSettings)
+  const taxAmt = taxCalculation.vat
+  const total = taxCalculation.gross
 
   // Checkout mutation
   const checkout = useMutation({
     mutationFn: async (details: PaymentDetails) => {
-      if (!orgId || items.length === 0) throw new Error('Cart is empty')
+      if (!orgId || !activeBranchId) throw new Error('Select a branch before opening a sale')
+      if (items.length === 0) throw new Error('Cart is empty')
       const { method: paymentMethod, customerId } = details
       if (paymentMethod === 'credit' && !customerId) throw new Error('Choose a customer for a credit sale')
       if (paymentMethod === 'cash' && details.tendered != null && details.tendered < total) throw new Error('Amount tendered is less than the total due')
@@ -118,7 +121,7 @@ export default function POSPage() {
       const dbPaymentStatus: 'paid' | 'credit' = paymentMethod === 'credit' ? 'credit' : 'paid'
       const payload = {
         organizationId: orgId,
-        branchId: null,
+        branchId: activeBranchId,
         referenceNumber: ref,
         customerId: customerId || null,
         cashierId: currentUser?.id ?? null,
@@ -150,7 +153,7 @@ export default function POSPage() {
         .from('sale')
         .insert({
           organization_id: orgId,
-          branch_id: null,
+          branch_id: activeBranchId,
           reference_number: ref,
           customer_id: customerId || null,
           cashier_id: currentUser?.id ?? null,
@@ -171,7 +174,7 @@ export default function POSPage() {
         // Only a genuine connectivity failure goes to the offline queue.
         // Anything else (constraint, permission, validation) must surface to the cashier.
         if (isNetworkError(error)) {
-          await enqueueTransaction({ organizationId: orgId, branchId: null, payload })
+          await enqueueTransaction({ organizationId: orgId, branchId: activeBranchId, payload })
           return { ref, offline: true, method: paymentMethod, change, details }
         }
         throw new Error(error.message)
@@ -204,14 +207,28 @@ export default function POSPage() {
         if (custError) throw new Error(`Sale ${ref} was saved but the customer account could not be updated: ${custError.message}`)
       }
 
-      // Update stock levels
+      // Deduct only from warehouses belonging to the active branch.
       for (const item of items) {
-        const { error: stockError } = await supabase.rpc('decrement_stock', {
-          p_product_id: item.productId,
-          p_organization_id: orgId,
-          p_quantity: item.quantity,
-        })
-        if (stockError) throw new Error(`Sale ${ref} was saved but stock could not be updated: ${stockError.message}`)
+        const product = products.find((candidate) => candidate.id === item.productId)
+        const levels = ((product?.stock_level ?? []) as unknown as BranchStockLevel[])
+          .filter((level) => branchIdFor(level) === activeBranchId)
+          .sort((a, b) => b.quantity - a.quantity)
+        let remaining = item.quantity
+        for (const level of levels) {
+          if (remaining <= 0) break
+          const deduction = Math.min(level.quantity, remaining)
+          const { data: updated, error: stockError } = await supabase
+            .from('stock_level')
+            .update({ quantity: level.quantity - deduction, updated_at: new Date().toISOString() })
+            .eq('id', level.id)
+            .eq('organization_id', orgId)
+            .eq('quantity', level.quantity)
+            .select('id')
+          if (stockError) throw new Error(`Sale ${ref} was saved but branch stock could not be updated: ${stockError.message}`)
+          if (!updated?.length) throw new Error(`Sale ${ref} was saved but branch stock changed during checkout. Review inventory before retrying.`)
+          remaining -= deduction
+        }
+        if (remaining > 0) throw new Error(`Sale ${ref} was saved but the selected branch did not have enough stock to complete the deduction.`)
       }
 
       return { ref, offline: false, method: paymentMethod, change, details }
@@ -229,6 +246,7 @@ export default function POSPage() {
         items: items.map((i) => ({ name: i.name, sku: i.sku, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })),
         subtotal,
         discountAmt,
+        taxAmt,
         total,
         method: result.method,
         tendered: result.details.tendered,
@@ -248,13 +266,17 @@ export default function POSPage() {
     },
   })
 
-  type StockLevel = { quantity: number }
+  type BranchStockLevel = { id: string; quantity: number; warehouse: { branch_id: string | null } | Array<{ branch_id: string | null }> | null }
+  function branchIdFor(level: BranchStockLevel) {
+    return Array.isArray(level.warehouse) ? level.warehouse[0]?.branch_id ?? null : level.warehouse?.branch_id ?? null
+  }
   type ProductRow = typeof products[number]
 
   function getStockQty(product: ProductRow): number {
-    const sl = product.stock_level as StockLevel[] | null
+    const sl = product.stock_level as unknown as BranchStockLevel[] | null
     if (!sl || sl.length === 0) return 0
-    return sl.reduce((s, l) => s + l.quantity, 0)
+    if (isDemoMode) return sl.reduce((sum, level) => sum + Number(level.quantity), 0)
+    return sl.filter((level) => branchIdFor(level) === activeBranchId).reduce((s, l) => s + Number(l.quantity), 0)
   }
 
   /** Units still available to sell right now: on-hand stock minus what is already in the cart. */
@@ -277,6 +299,9 @@ export default function POSPage() {
   }
 
   return (
+    !activeBranchId ? (
+      <div className="p-6"><div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-900"><h1 className="text-xl font-bold">Select a branch to use POS</h1><p className="mt-1 text-sm">Sales and stock deductions must belong to one branch. The all-branches view is reporting-only.</p></div></div>
+    ) :
     <div className="flex flex-col lg:flex-row min-h-[calc(100vh-72px)] lg:h-[calc(100vh-72px)]">
       {/* Left: Product browser */}
       <div className="flex-1 flex flex-col lg:border-r border-[#bacac8] min-w-0 min-h-[58vh] lg:min-h-0">
@@ -460,9 +485,9 @@ export default function POSPage() {
               <span>Discount ({discount}%)</span><span>-{formatCurrency(discountAmt)}</span>
             </div>
           )}
-          {TAX_RATE > 0 && (
+          {taxSettings.vatEnabled && (
             <div className="flex justify-between text-[13px] text-[#6b7a79]">
-              <span>Tax ({Math.round(TAX_RATE * 100)}%)</span><span>{formatCurrency(taxAmt)}</span>
+              <span>VAT included ({taxSettings.vatRate}%)</span><span>{formatCurrency(taxAmt)}</span>
             </div>
           )}
           <div className="flex justify-between text-[16px] font-bold text-[#0b1c30] pt-2 border-t border-[#e5eeff]">

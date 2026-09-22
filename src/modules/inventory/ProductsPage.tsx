@@ -11,6 +11,7 @@ import { isDemoMode } from '@/shared/lib/supabase'; import { DEMO_PRODUCTS } fro
 
 export default function ProductsPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -30,14 +31,14 @@ export default function ProductsPage() {
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products-list', orgId, categoryFilter, page, search],
+    queryKey: ['products-list', orgId, activeBranchId, categoryFilter, page, search],
     queryFn: async () => {
       if (isDemoMode) { const q=search.toLowerCase(); const rows=DEMO_PRODUCTS.filter(p=>(categoryFilter==='all'||p.category_id===categoryFilter)&&(!q||String(p.name).toLowerCase().includes(q)||String(p.sku).toLowerCase().includes(q))); return {data:rows,count:rows.length} }
       if (!orgId) return { data: [], count: 0 }
       let query = supabase
         .from('product')
         .select(
-          'id, sku, name, unit_price, image_url, is_active, category_id, product_category(name), stock_level(quantity, warehouse(name))',
+          'id, sku, name, unit_price, image_url, is_active, category_id, product_category(name), stock_level(quantity, warehouse(name,branch_id))',
           { count: 'exact' }
         )
         .eq('organization_id', orgId)
@@ -58,11 +59,11 @@ export default function ProductsPage() {
   const products = data?.data ?? []
   const totalPages = Math.ceil((data?.count ?? 0) / PAGE_SIZE)
 
-  type StockLevelEntry = { quantity: number; warehouse: { name: string } | null }
+  type StockLevelEntry = { quantity: number; warehouse: { name: string; branch_id: string | null } | null }
 
   function getTotalStock(sl: StockLevelEntry[] | null): number {
     if (!sl) return 0
-    return sl.reduce((s, l) => s + l.quantity, 0)
+    return sl.filter((level) => !activeBranchId || level.warehouse?.branch_id === activeBranchId).reduce((s, l) => s + l.quantity, 0)
   }
 
   function getStockBadge(qty: number) {

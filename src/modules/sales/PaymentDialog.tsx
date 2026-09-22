@@ -35,6 +35,7 @@ export interface CompletedSale {
   items: ReceiptLine[]
   subtotal: number
   discountAmt: number
+  taxAmt: number
   total: number
   method: PaymentMethodKey
   tendered: number | null
@@ -352,6 +353,7 @@ function Receipt({ sale }: { sale: CompletedSale }) {
       <div className="space-y-1 tabular-nums">
         <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(sale.subtotal)}</span></div>
         {sale.discountAmt > 0 && <div className="flex justify-between"><span>Discount</span><span>−{formatCurrency(sale.discountAmt)}</span></div>}
+        {sale.taxAmt > 0 && <div className="flex justify-between"><span>VAT included</span><span>{formatCurrency(sale.taxAmt)}</span></div>}
         <div className="flex justify-between text-[14px] font-bold"><span>TOTAL</span><span>{formatCurrency(sale.total)}</span></div>
       </div>
 

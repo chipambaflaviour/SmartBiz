@@ -1,9 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useAppStore } from '@/shared/stores/appStore'
 import { isDemoMode, supabase } from '@/shared/lib/supabase'
 import { DEMO_MODULES } from '@/shared/lib/demo'
 import { PageHeader, Card, Spinner, Badge } from '@/shared/components/ui/Display'
-import { Button } from '@/shared/components/ui/Button'
 import { cn } from '@/shared/lib/utils'
 
 const MODULES_CONFIG = [
@@ -24,7 +23,6 @@ type ModuleSetting = { module_key: string; is_enabled: boolean }
 
 export default function ModulesPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
-  const queryClient = useQueryClient()
 
   const { data: modules = [], isLoading } = useQuery<ModuleSetting[]>({
     // NOTE: must differ from useOrganizationModules' ['org-modules'] key — the row shape is different
@@ -44,33 +42,13 @@ export default function ModulesPage() {
     enabled: !!orgId,
   })
 
-  const toggleModule = useMutation({
-    mutationFn: async ({ moduleKey, isEnabled }: { moduleKey: string; isEnabled: boolean }): Promise<ModuleSetting[] | undefined> => {
-      if (isDemoMode) {
-        const next = MODULES_CONFIG.map((module) => ({ module_key: module.key, is_enabled: module.key === moduleKey ? isEnabled : (modules.find((item) => item.module_key === module.key)?.is_enabled ?? true) }))
-        localStorage.setItem('smartbiz-demo-modules', JSON.stringify(next))
-        return next
-      }
-      const existing = modules.find((m) => m.module_key === moduleKey)
-      const result = existing
-        ? await supabase.from('organization_module').update({ is_enabled: isEnabled }).eq('organization_id', orgId!).eq('module_key', moduleKey)
-        : await supabase.from('organization_module').insert({ organization_id: orgId!, module_key: moduleKey, is_enabled: isEnabled })
-      if (result.error) throw new Error(result.error.message)
-    },
-    onSuccess: (next) => {
-      if (isDemoMode && next) queryClient.setQueryData(['org-module-settings', orgId], next)
-      queryClient.invalidateQueries({ queryKey: ['org-module-settings'] })
-      queryClient.invalidateQueries({ queryKey: ['org-modules'] })
-    },
-  })
-
   const isEnabled = (key: string) => modules.find((m) => m.module_key === key)?.is_enabled ?? false
 
   return (
     <div>
       <PageHeader
         title="Module Management"
-        subtitle="Enable or disable modules for your organization. Changes take effect immediately."
+        subtitle="Modules included in your organization’s SmartBiz subscription."
         breadcrumb={[{ label: 'Settings' }, { label: 'Modules' }]}
       />
 
@@ -82,7 +60,7 @@ export default function ModulesPage() {
             <div className="mb-4 p-3 bg-[#eff4ff] border border-[#dce9ff] rounded-lg flex items-center gap-2">
               <span className="material-symbols-outlined text-[#006a67] text-[18px]">info</span>
               <p className="text-[13px] text-[#3b4948]">
-                Disabling a module hides it from the sidebar and blocks access to its routes. Data is preserved.
+                Purchased modules are controlled by SmartBiz Platform Administration. Organization administrators can distribute these modules to branches and employees, but cannot add unpaid modules.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -105,24 +83,7 @@ export default function ModulesPage() {
                       )}>
                         <span className="material-symbols-outlined text-[22px]">{mod.icon}</span>
                       </div>
-                      {isComing ? (
-                        <Badge variant="outline">Coming Soon</Badge>
-                      ) : (
-                        <button
-                          onClick={() => !isComing && toggleModule.mutate({ moduleKey: mod.key, isEnabled: !enabled })}
-                          disabled={isComing}
-                          className={cn(
-                            'relative w-11 h-6 rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00CEC8]',
-                            enabled ? 'bg-[#006a67] border-[#006a67]' : 'bg-white border-[#bacac8]',
-                            isComing && 'cursor-not-allowed'
-                          )}
-                        >
-                          <span className={cn(
-                            'absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-                            enabled ? 'translate-x-5' : 'translate-x-0.5'
-                          )} />
-                        </button>
-                      )}
+                      <Badge variant={enabled ? 'success' : 'outline'}>{enabled ? 'Purchased' : 'Not included'}</Badge>
                     </div>
                     <div>
                       <p className="text-[14px] font-semibold text-[#0b1c30]">{mod.label}</p>
@@ -134,7 +95,7 @@ export default function ModulesPage() {
                         isComing ? 'bg-[#bacac8]' : enabled ? 'bg-[#16a34a]' : 'bg-[#bacac8]'
                       )} />
                       <span className="text-[11px] text-[#6b7a79]">
-                        {isComing ? 'Coming soon' : enabled ? 'Active' : 'Disabled'}
+                        {enabled ? 'Available to assign' : 'Contact SmartBiz to add this module'}
                       </span>
                     </div>
                   </div>

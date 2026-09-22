@@ -74,7 +74,12 @@ export const useAppStore = create<AppState>()(
       activeBranchId: null,
       currentUser: null,
       isPlatformAdmin: false,
-      setActiveOrganizationId: (id) => set({ activeOrganizationId: id }),
+      // A branch always belongs to exactly one organization. Clearing it here
+      // prevents a stale branch from leaking into the next workspace context.
+      setActiveOrganizationId: (id) => set((state) => ({
+        activeOrganizationId: id,
+        activeBranchId: state.activeOrganizationId === id ? state.activeBranchId : null,
+      })),
       setActiveBranchId: (id) => set({ activeBranchId: id }),
       setCurrentUser: (user) => set({ currentUser: user }),
       setIsPlatformAdmin: (value) => set({ isPlatformAdmin: value }),

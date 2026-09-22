@@ -57,6 +57,7 @@ export default function ProductEditorPage() {
   const { id } = useParams()
   const editing = Boolean(id)
   const orgId = useAppStore(s => s.activeOrganizationId)
+  const activeBranchId = useAppStore(s => s.activeBranchId)
   const currentUser = useAppStore(s => s.currentUser)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -85,8 +86,12 @@ export default function ProductEditorPage() {
   })
 
   const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses', orgId],
-    queryFn: async () => (await supabase.from('warehouse').select('id, name, is_default').eq('organization_id', orgId!).is('deleted_at', null).order('name')).data ?? [],
+    queryKey: ['warehouses', orgId, activeBranchId],
+    queryFn: async () => {
+      let query = supabase.from('warehouse').select('id, name, is_default, branch_id').eq('organization_id', orgId!).is('deleted_at', null).order('name')
+      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
+      return (await query).data ?? []
+    },
     enabled: !!orgId,
   })
 
@@ -101,9 +106,15 @@ export default function ProductEditorPage() {
   })
 
   const { data: existingStock = [] } = useQuery({
-    queryKey: ['product-stock', orgId, id],
-    queryFn: async () => (await supabase.from('stock_level').select('warehouse_id, quantity').eq('organization_id', orgId!).eq('product_id', id!)).data ?? [],
-    enabled: editing && !!orgId,
+    queryKey: ['product-stock', orgId, activeBranchId, id],
+    queryFn: async () => {
+      const warehouseIds = warehouses.map((warehouse) => warehouse.id)
+      if (activeBranchId && warehouseIds.length === 0) return []
+      let query = supabase.from('stock_level').select('warehouse_id, quantity').eq('organization_id', orgId!).eq('product_id', id!)
+      if (activeBranchId) query = query.in('warehouse_id', warehouseIds)
+      return (await query).data ?? []
+    },
+    enabled: editing && !!orgId && (!activeBranchId || warehouses.length > 0),
   })
 
   const totalOnHand = warehouses.length === 0
@@ -177,10 +188,11 @@ export default function ProductEditorPage() {
       let targets = warehouses
       const entries = Object.entries(stock).filter(([, v]) => v !== '')
       if (entries.length === 0 && pendingQuantity !== '' && Number(pendingQuantity) > 0) {
+        if (!activeBranchId) throw new Error('Select a branch before creating its default warehouse and opening stock.')
         // No warehouse existed when the form loaded: create the default one now.
         const { data: created, error: whError } = await supabase.from('warehouse')
-          .insert({ organization_id: orgId, name: 'Main Warehouse', code: 'MAIN', is_default: true })
-          .select('id, name, is_default').single()
+          .insert({ organization_id: orgId, branch_id: activeBranchId, name: 'Main Warehouse', code: `MAIN-${activeBranchId.slice(0, 6).toUpperCase()}`, is_default: true })
+          .select('id, name, is_default, branch_id').single()
         if (whError) throw new Error(`Product saved, but no warehouse exists to hold stock and one could not be created: ${whError.message}`)
         targets = [created]
         entries.push([created.id, pendingQuantity])

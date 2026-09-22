@@ -9,17 +9,19 @@ import { Button } from '@/shared/components/ui/Button'
 export default function InvoiceDetailPage() {
   const { id } = useParams()
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const navigate = useNavigate()
   const { data: invoice, isLoading } = useQuery({
-    queryKey: ['invoice-detail', orgId, id],
+    queryKey: ['invoice-detail', orgId, activeBranchId, id],
     queryFn: async () => {
       if (!id || !orgId) return null
-      const { data, error } = await supabase
+      let query = supabase
         .from('invoice')
         .select('*, customer(id, name, email, phone, address, city, country), sale(sale_item(quantity, unit_price, line_total, product(name)))')
         .eq('organization_id', orgId)
         .eq('id', id)
-        .single()
+      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
+      const { data, error } = await query.single()
       if (error) throw error
       return data
     },

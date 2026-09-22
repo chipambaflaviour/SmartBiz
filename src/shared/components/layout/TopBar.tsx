@@ -6,6 +6,7 @@ import { useAppStore, useUIStore } from '@/shared/stores/appStore'
 import { Avatar } from '@/shared/components/ui/Display'
 import { cn } from '@/shared/lib/utils'
 import { isDemoMode } from '@/shared/lib/supabase'
+import { BranchSwitcher } from '@/shared/components/BranchSwitcher'
 
 const isMac =
   typeof navigator !== 'undefined' &&
@@ -85,20 +86,26 @@ export function TopBar() {
           <span className="material-symbols-outlined text-[20px]">menu</span>
         </button>
 
-        {/* Org switcher trigger */}
-        <button
-          onClick={() => setOrgSwitcherOpen(true)}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#e5eeff] transition-colors"
-        >
+        <div className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[#e5eeff]">
           <div className="w-7 h-7 rounded-full bg-[#00CEC8] flex items-center justify-center text-white text-[11px] font-bold shrink-0">
             {org?.name ? org.name.slice(0, 2).toUpperCase() : isPlatformAdmin ? 'SA' : 'SB'}
           </div>
-          <div className="text-left hidden sm:block">
-            <p className="text-[12px] font-semibold text-[#0b1c30] leading-none">{org?.name ?? (isPlatformAdmin ? 'SmartBiz Platform' : 'Select Org')}</p>
-            <p className="text-[11px] text-[#6b7a79] leading-none mt-0.5">{isPlatformAdmin ? (org ? 'Super Administrator · full access' : 'Super Administrator') : 'Main Branch'}</p>
+          <div className="hidden min-w-0 text-left sm:block">
+            <button
+              type="button"
+              onClick={() => setOrgSwitcherOpen(true)}
+              aria-label="Switch organization"
+              className="flex max-w-[210px] items-center gap-0.5 rounded text-[12px] font-semibold leading-none text-[#0b1c30] outline-none hover:text-[#006a67] focus-visible:ring-2 focus-visible:ring-[#00CEC8]"
+            >
+              <span className="truncate">{org?.name ?? (isPlatformAdmin ? 'SmartBiz Platform' : 'Select organization')}</span>
+              <span className="material-symbols-outlined text-[16px] text-[#6b7a79]" aria-hidden="true">expand_more</span>
+            </button>
+            {activeOrgId ? <div className="mt-1"><BranchSwitcher /></div> : <p className="mt-1 text-[11px] leading-none text-[#6b7a79]">Platform Backoffice</p>}
           </div>
-          <span className="material-symbols-outlined text-[#6b7a79] text-[18px]">expand_more</span>
-        </button>
+          <button type="button" onClick={() => setOrgSwitcherOpen(true)} aria-label="Switch organization" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-[#00CEC8] sm:hidden">
+            <span className="material-symbols-outlined text-[#6b7a79] text-[18px]">expand_more</span>
+          </button>
+        </div>
       </div>
 
       {/* Center: global search */}

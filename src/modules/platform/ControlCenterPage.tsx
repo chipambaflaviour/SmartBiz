@@ -14,7 +14,7 @@ type Org = { id: string; name: string; type: string; plan: string; status: OrgSt
 
 const initialOrganizations: Org[] = [
   { id: 'ORG-001', name: 'Lusaka Fresh Market', type: 'Main organization', plan: 'Professional', status: 'Active', branches: 4, users: 38, renewal: '01 Oct 2026', modules: ['dashboard','pos','inventory','purchasing','suppliers','crm','finance','reports','approvals'] },
-  { id: 'ORG-002', name: 'Choma Agro Holdings', type: 'Parent organization', plan: 'Enterprise', status: 'Active', branches: 7, users: 84, renewal: '15 Oct 2026', modules: ['dashboard','inventory','purchasing','suppliers','crm','hr','payroll','finance','expenses','accounting','assets','reports','approvals','workflow'] },
+  { id: 'ORG-002', name: 'Choma Agro Holdings', type: 'Organization workspace', plan: 'Enterprise', status: 'Active', branches: 7, users: 84, renewal: '15 Oct 2026', modules: ['dashboard','inventory','purchasing','suppliers','crm','hr','payroll','finance','expenses','accounting','assets','reports','approvals','workflow'] },
   { id: 'ORG-003', name: 'Copperbelt Bakers', type: 'Main organization', plan: 'Starter', status: 'Trial', branches: 1, users: 6, renewal: '18 Sep 2026', modules: ['dashboard','pos','inventory','crm'] },
   { id: 'ORG-004', name: 'Kabwe Trading Co.', type: 'Main organization', plan: 'Professional', status: 'Expired', branches: 2, users: 14, renewal: '31 Aug 2026', modules: ['dashboard','pos','inventory','purchasing','crm','finance'] },
 ]
@@ -47,9 +47,9 @@ export default function ControlCenterPage() {
   const { data: liveOrganizations = [] } = useQuery<Org[]>({
     queryKey: ['platform-organizations'], enabled: !isDemoMode,
     queryFn: async () => {
-      const { data, error } = await supabase.from('organization').select('id,name,plan,status,subscription_expires_at,organization_module(module_key,is_enabled)').is('deleted_at',null).order('created_at',{ascending:false})
+      const { data, error } = await supabase.from('organization').select('id,name,plan,status,subscription_expires_at,organization_module(module_key,is_enabled),branch(count),user_organization(count)').is('deleted_at',null).order('created_at',{ascending:false})
       if (error) throw error
-      return (data ?? []).map((row: any) => ({ id: row.id, name: row.name, type: 'Main organization', plan: row.plan === 'pro' ? 'Professional' : `${row.plan.charAt(0).toUpperCase()}${row.plan.slice(1)}`, status: `${row.status.charAt(0).toUpperCase()}${row.status.slice(1)}` as OrgStatus, branches: 0, users: 0, renewal: row.subscription_expires_at ? new Date(row.subscription_expires_at).toLocaleDateString('en-ZM') : 'Not set', modules: (row.organization_module ?? []).filter((m:any)=>m.is_enabled).map((m:any)=>m.module_key) }))
+      return (data ?? []).map((row: any) => ({ id: row.id, name: row.name, type: 'Organization workspace', plan: row.plan === 'pro' ? 'Professional' : `${row.plan.charAt(0).toUpperCase()}${row.plan.slice(1)}`, status: `${row.status.charAt(0).toUpperCase()}${row.status.slice(1)}` as OrgStatus, branches: Number(row.branch?.[0]?.count ?? 0), users: Number(row.user_organization?.[0]?.count ?? 0), renewal: row.subscription_expires_at ? new Date(row.subscription_expires_at).toLocaleDateString('en-ZM') : 'Not set', modules: (row.organization_module ?? []).filter((m:any)=>m.is_enabled).map((m:any)=>m.module_key) }))
     },
   })
   const organizations = isDemoMode ? localOrganizations : liveOrganizations

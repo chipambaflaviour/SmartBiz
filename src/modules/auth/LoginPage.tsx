@@ -417,12 +417,8 @@ export default function LoginPage() {
               ) : 'Sign In'}
             </button>
 
-            {/* Sign-up link */}
-            <p style={{ textAlign: 'center', fontSize: 14, color: '#6b7a79' }}>
-              New to SmartBiz?{' '}
-              <Link to="/auth/signup" style={{ color: '#006a67', fontWeight: 700, textDecoration: 'none' }}>
-                Create an Organization
-              </Link>
+            <p style={{ textAlign: 'center', fontSize: 13, lineHeight: 1.5, color: '#6b7a79' }}>
+              Access is invitation-only. Organization owners and employees receive an email invitation from SmartBiz.
             </p>
           </form>
 

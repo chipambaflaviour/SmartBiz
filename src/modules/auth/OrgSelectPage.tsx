@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { supabase } from '@/shared/lib/supabase'
 import { useAppStore } from '@/shared/stores/appStore'
@@ -133,9 +133,7 @@ export default function OrgSelectPage() {
                 business
               </span>
               <p style={{ fontSize: 14, color: '#6b7a79', marginBottom: 12 }}>No organizations found.</p>
-              <Link to="/auth/signup" style={{ fontSize: 14, fontWeight: 600, color: '#006a67', textDecoration: 'none' }}>
-                Create one
-              </Link>
+              <p style={{ fontSize: 13, color: '#6b7a79' }}>Ask your organization owner or SmartBiz Platform Administration to assign your account.</p>
             </div>
           )}
 
@@ -231,37 +229,10 @@ export default function OrgSelectPage() {
           })}
         </div>
 
-        {/* Footer actions */}
-        <div style={{ padding: '16px 28px', borderTop: '1px solid #f0f0f5', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <button
-            onClick={() => navigate('/auth/signup')}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '11px 16px', borderRadius: 8,
-              border: '1px solid #bacac8', background: '#fff',
-              fontSize: 13, fontWeight: 500, color: '#3b4948',
-              cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#f0f9f8')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#006a67' }}>add_circle</span>
-            Create New Organization
-          </button>
-          <button
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '11px 16px', borderRadius: 8,
-              border: '1px solid #bacac8', background: '#fff',
-              fontSize: 13, fontWeight: 500, color: '#3b4948',
-              cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#f0f9f8')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#006a67' }}>key</span>
-            Join via Code
-          </button>
+        <div style={{ padding: '16px 28px', borderTop: '1px solid #f0f0f5', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: '#6b7a79' }}>
+            Missing a workspace? Ask your organization owner or the SmartBiz platform administrator to invite you.
+          </p>
         </div>
       </div>
 

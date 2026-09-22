@@ -24,12 +24,17 @@ export default function EmployeeEditorPage() {
   const { id } = useParams()
   const editing = Boolean(id)
   const orgId = useAppStore(state => state.activeOrganizationId)
+  const activeBranchId = useAppStore(state => state.activeBranchId)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [form, setForm] = useState(initial)
   const [modules, setModules] = useState<string[]>([])
   const [giveAccess, setGiveAccess] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!editing && activeBranchId) setForm(current => ({ ...current, branch_id: current.branch_id || activeBranchId }))
+  }, [activeBranchId, editing])
 
   const { data: branches = [] } = useQuery({ queryKey: ['branches', orgId], queryFn: async () => (await supabase.from('branch').select('id,name').eq('organization_id', orgId!).is('deleted_at', null)).data ?? [], enabled: !!orgId })
   const { data: departments = [] } = useQuery({ queryKey: ['departments', orgId], queryFn: async () => (await supabase.from('department').select('id,name').eq('organization_id', orgId!).is('deleted_at', null)).data ?? [], enabled: !!orgId })
@@ -50,7 +55,8 @@ export default function EmployeeEditorPage() {
       // The database rejects modules the organization hasn't purchased; core modules
       // (dashboard etc.) are always shown in the app, so sending them adds nothing.
       const moduleKeys = modules.filter(key => purchased.includes(key))
-      const { data: access, error: accessError } = await supabase.functions.invoke<{ outcome?: 'invited' | 'resent' | 'linked' }>('manage-employee-access', { body: { organizationId: orgId, employeeId: result.data.id, email: payload.email, role: form.role, moduleKeys } })
+      const branchIds = payload.branch_id ? [payload.branch_id] : []
+      const { data: access, error: accessError } = await supabase.functions.invoke<{ outcome?: 'invited' | 'resent' | 'linked' }>('manage-employee-access', { body: { organizationId: orgId, employeeId: result.data.id, email: payload.email, role: form.role, moduleKeys, branchIds } })
       if (accessError) {
         // Edge functions return the real reason in the JSON body; surface it instead of the generic HTTP error.
         const body = await (accessError as { context?: Response }).context?.json?.().catch(() => null)

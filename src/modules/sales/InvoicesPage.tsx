@@ -17,6 +17,7 @@ const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default'
 
 export default function InvoicesPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -24,7 +25,7 @@ export default function InvoicesPage() {
   const PAGE_SIZE = 20
 
   const { data, isLoading } = useQuery({
-    queryKey: ['invoices', orgId, statusFilter, page],
+    queryKey: ['invoices', orgId, activeBranchId, statusFilter, page],
     queryFn: async () => {
       if (isDemoMode) { const rows=DEMO_INVOICES.filter(x=>statusFilter==='all'||x.status===statusFilter); return {data:rows,count:rows.length} }
       if (!orgId) return { data: [], count: 0 }
@@ -37,6 +38,7 @@ export default function InvoicesPage() {
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
 
       if (statusFilter !== 'all') query = query.eq('status', statusFilter)
+      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
       const { data, count, error } = await query
       if (error) throw error
       return { data: data ?? [], count: count ?? 0 }

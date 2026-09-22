@@ -14,12 +14,13 @@ Deno.serve(async (request) => {
     const { data: session } = await caller.auth.getUser()
     if (!session.user) throw new Error('Authentication required')
 
-    const { organizationId, employeeId, email, role = 'member', moduleKeys = [] } = await request.json()
+    const { organizationId, employeeId, email, role = 'member', moduleKeys = [], branchIds = [] } = await request.json()
     if (!organizationId || !employeeId || !email) throw new Error('Organization, employee and email are required')
     const { data: membership } = await caller.from('user_organization').select('role').eq('organization_id', organizationId).eq('user_id', session.user.id).eq('is_active', true).maybeSingle()
     const { data: platformAdmin } = await caller.rpc('is_platform_admin')
     if (!platformAdmin && !['owner', 'admin'].includes(membership?.role ?? '')) throw new Error('Organization administrator access required')
     if (!['admin', 'manager', 'member', 'auditor'].includes(role)) throw new Error('Invalid employee role')
+    if (!Array.isArray(branchIds) || branchIds.some((value) => typeof value !== 'string')) throw new Error('Invalid branch assignment')
 
     const normalizedEmail = email.trim().toLowerCase()
     const { data: listed } = await admin.auth.admin.listUsers({ perPage: 1000 })
@@ -45,8 +46,21 @@ Deno.serve(async (request) => {
     // organization creation keeps that role even if they are also listed as an employee.
     const { data: existingMembership } = await admin.from('user_organization').select('role').eq('user_id', target.id).eq('organization_id', organizationId).maybeSingle()
     const effectiveRole = existingMembership?.role === 'owner' ? 'owner' : role
-    const { error: memberError } = await admin.from('user_organization').upsert({ user_id: target.id, organization_id: organizationId, role: effectiveRole, is_active: true }, { onConflict: 'user_id,organization_id' })
+    const primaryBranchId = ['owner', 'admin'].includes(effectiveRole) ? null : branchIds[0] ?? null
+    const { error: memberError } = await admin.from('user_organization').upsert({ user_id: target.id, organization_id: organizationId, role: effectiveRole, branch_id: primaryBranchId, is_active: true }, { onConflict: 'user_id,organization_id' })
     if (memberError) throw memberError
+    const { error: clearBranchError } = await admin.from('user_branch_access').delete().eq('user_id', target.id).eq('organization_id', organizationId)
+    if (clearBranchError) throw clearBranchError
+    if (!['owner', 'admin'].includes(effectiveRole) && branchIds.length > 0) {
+      const uniqueBranchIds = [...new Set(branchIds)]
+      const { error: branchAccessError } = await admin.from('user_branch_access').insert(uniqueBranchIds.map((branchId) => ({
+        user_id: target.id,
+        organization_id: organizationId,
+        branch_id: branchId,
+        is_active: true,
+      })))
+      if (branchAccessError) throw branchAccessError
+    }
     const { error: employeeError } = await admin.from('employee').update({ user_id: target.id, updated_by: session.user.id }).eq('id', employeeId).eq('organization_id', organizationId)
     if (employeeError) throw employeeError
     const { error: accessError } = await caller.rpc('assign_user_module_access', { p_user_id: target.id, p_organization_id: organizationId, p_module_keys: moduleKeys })

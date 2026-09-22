@@ -19,6 +19,7 @@ const typeVariant: Record<string, 'default' | 'info' | 'outline'> = {
 
 export default function EmployeesPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const navigate = useNavigate()
   const location = useLocation()
   const [notice, setNotice] = useState<string | null>((location.state as { notice?: string } | null)?.notice ?? null)
@@ -39,7 +40,7 @@ export default function EmployeesPage() {
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['employees', orgId, deptFilter, page, search],
+    queryKey: ['employees', orgId, activeBranchId, deptFilter, page, search],
     queryFn: async () => {
       if (isDemoMode) { const q=search.toLowerCase(); const rows=DEMO_EMPLOYEES.filter(x=>!q||`${x.first_name} ${x.last_name} ${x.position}`.toLowerCase().includes(q)); return {data:rows,count:rows.length} }
       if (!orgId) return { data: [], count: 0 }
@@ -55,6 +56,7 @@ export default function EmployeesPage() {
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
 
       if (deptFilter !== 'all') query = query.eq('department_id', deptFilter)
+      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
       if (search) query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`)
 
       const { data, count, error } = await query

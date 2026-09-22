@@ -25,6 +25,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 export default function DashboardPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
+  const activeBranchId = useAppStore((s) => s.activeBranchId)
   const currentUser = useAppStore((s) => s.currentUser)
   const navigate = useNavigate()
 
@@ -37,25 +38,31 @@ export default function DashboardPage() {
 
   // KPIs
   const { data: kpis, isLoading: kpisLoading } = useQuery({
-    queryKey: ['dashboard-kpis', orgId],
+    queryKey: ['dashboard-kpis', orgId, activeBranchId],
     queryFn: async () => {
-      if (isDemoMode) return { revenue: 847250, sales: 1284, outstanding: 124800, pendingApprovals: 4, lowStockCount: 23 }
+      if (isDemoMode) return { revenue: 730387.93, grossSales: 847250, vatCollected: 116862.07, sales: 1284, outstanding: 124800, pendingApprovals: 4, lowStockCount: 23 }
       if (!orgId) return null
 
       const today = new Date()
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 
-      const [salesRes, invoiceRes, pendingRes, lowStockRes] = await Promise.all([
-        supabase
+      let salesQuery = supabase
           .from('sale')
-          .select('total_amount')
+          .select('total_amount,tax_amount')
           .eq('organization_id', orgId)
           .gte('sale_date', startOfMonth)
-          .eq('payment_status', 'paid'),
-        supabase
+          .eq('payment_status', 'paid')
+      let invoiceQuery = supabase
           .from('invoice')
           .select('total_amount, paid_amount, status')
-          .eq('organization_id', orgId),
+          .eq('organization_id', orgId)
+      if (activeBranchId) {
+        salesQuery = salesQuery.eq('branch_id', activeBranchId)
+        invoiceQuery = invoiceQuery.eq('branch_id', activeBranchId)
+      }
+      const [salesRes, invoiceRes, pendingRes, lowStockRes] = await Promise.all([
+        salesQuery,
+        invoiceQuery,
         supabase
           .from('approval_request')
           .select('id', { count: 'exact', head: true })
@@ -63,29 +70,33 @@ export default function DashboardPage() {
           .eq('status', 'pending'),
         supabase
           .from('stock_level')
-          .select('product_id, quantity, product(reorder_level)')
+          .select('product_id, quantity, product(reorder_level), warehouse(branch_id)')
           .eq('organization_id', orgId),
       ])
 
-      const revenue = (salesRes.data ?? []).reduce((s, r) => s + r.total_amount, 0)
+      const grossSales = (salesRes.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0)
+      const vatCollected = (salesRes.data ?? []).reduce((s, r) => s + Number(r.tax_amount ?? 0), 0)
+      const revenue = grossSales - vatCollected
       const sales = (salesRes.data ?? []).length
       const outstanding = (invoiceRes.data ?? [])
         .filter((inv) => inv.status !== 'paid' && inv.status !== 'cancelled')
         .reduce((s, inv) => s + (inv.total_amount - inv.paid_amount), 0)
       const pendingApprovals = pendingRes.count ?? 0
       const lowStockCount = (lowStockRes.data ?? []).filter((sl) => {
+        const warehouse = sl.warehouse as unknown as { branch_id: string | null } | null
+        if (activeBranchId && warehouse?.branch_id !== activeBranchId) return false
         const prod = sl.product as unknown as { reorder_level: number } | null
         return sl.quantity <= (prod?.reorder_level ?? 10)
       }).length
 
-      return { revenue, sales, outstanding, pendingApprovals, lowStockCount }
+      return { revenue, grossSales, vatCollected, sales, outstanding, pendingApprovals, lowStockCount }
     },
     enabled: !!orgId,
   })
 
   // Revenue chart data (last 6 months)
   const { data: chartData = [] } = useQuery({
-    queryKey: ['dashboard-chart', orgId],
+    queryKey: ['dashboard-chart', orgId, activeBranchId],
     queryFn: async () => {
       if (isDemoMode) return [
         { month:'APR', revenue:510000, expenses:320000 },{ month:'MAY', revenue:570000, expenses:350000 },{ month:'JUN', revenue:620000, expenses:390000 },{ month:'JUL', revenue:735000, expenses:430000 },{ month:'AUG', revenue:780000, expenses:470000 },{ month:'SEP', revenue:847250, expenses:505000 },
@@ -97,14 +108,16 @@ export default function DashboardPage() {
         d.setMonth(d.getMonth() - i)
         const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
         const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString()
-        const { data } = await supabase
+        let query = supabase
           .from('sale')
-          .select('total_amount')
+          .select('total_amount,tax_amount')
           .eq('organization_id', orgId)
           .gte('sale_date', start)
           .lte('sale_date', end)
           .eq('payment_status', 'paid')
-        const revenue = (data ?? []).reduce((s, r) => s + r.total_amount, 0)
+        if (activeBranchId) query = query.eq('branch_id', activeBranchId)
+        const { data } = await query
+        const revenue = (data ?? []).reduce((s, r) => s + Number(r.total_amount) - Number(r.tax_amount ?? 0), 0)
         months.push({
           month: d.toLocaleString('default', { month: 'short' }).toUpperCase(),
           revenue,
@@ -118,7 +131,7 @@ export default function DashboardPage() {
 
   // Recent activity
   const { data: recentActivity = [] } = useQuery({
-    queryKey: ['dashboard-activity', orgId],
+    queryKey: ['dashboard-activity', orgId, activeBranchId],
     queryFn: async () => {
       if (isDemoMode) return [
         { id:'sale-1', reference_number:'INV-2024-0847', total_amount:12450, sale_date:new Date().toISOString(), customer:{name:'Kabwe Trading Co.'} },
@@ -127,12 +140,14 @@ export default function DashboardPage() {
         { id:'sale-4', reference_number:'INV-2024-0844', total_amount:4500, sale_date:new Date(Date.now()-172800000).toISOString(), customer:{name:'Choma Agro Fields'} },
       ]
       if (!orgId) return []
-      const { data } = await supabase
+      let query = supabase
         .from('sale')
         .select('id, reference_number, total_amount, sale_date, customer(name)')
         .eq('organization_id', orgId)
         .order('sale_date', { ascending: false })
         .limit(5)
+      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
+      const { data } = await query
       return data ?? []
     },
     enabled: !!orgId,
@@ -208,9 +223,9 @@ export default function DashboardPage() {
 
       <div className="px-6 grid grid-cols-12 gap-5">
         {/* KPI Cards */}
-        <div className="col-span-12 lg:col-span-3">
+        <div className="col-span-12 md:col-span-6 xl:col-span-3">
           <StatCard
-            label="Revenue (Month)"
+            label="Net Revenue (Month)"
             value={kpis ? formatCurrency(kpis.revenue) : '—'}
             icon="payments"
             badge={kpis ? '+8.2%' : undefined}
@@ -218,17 +233,20 @@ export default function DashboardPage() {
             loading={kpisLoading}
           />
         </div>
-        <div className="col-span-12 lg:col-span-3">
+        <div className="col-span-12 md:col-span-6 xl:col-span-2">
           <StatCard
-            label="Sales (Month)"
-            value={kpis ? String(kpis.sales) : '—'}
-            icon="shopping_cart"
-            badge={kpis ? '+12.5%' : undefined}
-            badgeVariant="success"
+            label="VAT Collected"
+            value={kpis ? formatCurrency(kpis.vatCollected) : '—'}
+            icon="receipt_long"
+            badge={kpis?.vatCollected ? 'Tax liability' : undefined}
+            badgeVariant="warning"
             loading={kpisLoading}
           />
         </div>
-        <div className="col-span-12 lg:col-span-3">
+        <div className="col-span-12 md:col-span-6 xl:col-span-2">
+          <StatCard label="Gross Sales" value={kpis ? formatCurrency(kpis.grossSales) : '—'} icon="shopping_cart" loading={kpisLoading} />
+        </div>
+        <div className="col-span-12 md:col-span-6 xl:col-span-3">
           <StatCard
             label="Outstanding Receivables"
             value={kpis ? formatCurrency(kpis.outstanding) : '—'}
@@ -236,7 +254,7 @@ export default function DashboardPage() {
             loading={kpisLoading}
           />
         </div>
-        <div className="col-span-12 lg:col-span-3">
+        <div className="col-span-12 md:col-span-6 xl:col-span-2">
           <StatCard
             label="Pending Approvals"
             value={kpis ? String(kpis.pendingApprovals) : '—'}

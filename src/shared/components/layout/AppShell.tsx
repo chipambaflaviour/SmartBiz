@@ -7,8 +7,11 @@ import { OrgSwitcher } from '@/shared/components/OrgSwitcher'
 import { ModuleGuard } from '@/shared/components/ModuleGuard'
 import { useUIStore } from '@/shared/stores/appStore'
 import { cn } from '@/shared/lib/utils'
+import { useBranches } from '@/shared/hooks/useBranches'
 
 export function AppShell() {
+  // Establish and continuously validate branch context for every workspace page.
+  useBranches()
   const collapsed = useUIStore((s) => s.sidebarCollapsed)
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen)
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen)
