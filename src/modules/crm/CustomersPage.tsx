@@ -8,6 +8,7 @@ import { Badge, PageHeader, Table, Thead, Th, Tr, Td, Skeleton, EmptyState, Avat
 import { Input, Select } from '@/shared/components/ui/FormElements'
 import { Button } from '@/shared/components/ui/Button'
 import { isDemoMode } from '@/shared/lib/supabase'; import { DEMO_CUSTOMERS } from '@/shared/lib/demo'
+import { usePreviewPermission } from '@/shared/hooks/usePreviewPermission'
 
 export default function CustomersPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
@@ -16,6 +17,7 @@ export default function CustomersPage() {
   const [segmentFilter, setSegmentFilter] = useState('all')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
+  const canCreate = usePreviewPermission('crm', 'create')
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers', orgId, segmentFilter, page, search],
@@ -54,10 +56,10 @@ export default function CustomersPage() {
         subtitle="Manage your customer relationships and accounts."
         breadcrumb={[{ label: 'CRM' }, { label: 'Customers' }]}
         actions={
-          <Button variant="primary" onClick={() => navigate('/app/crm/customers/new')}>
+          canCreate ? <Button variant="primary" onClick={() => navigate('/app/crm/customers/new')}>
             <span className="material-symbols-outlined text-[18px]">person_add</span>
             Add Customer
-          </Button>
+          </Button> : undefined
         }
       />
 
@@ -97,7 +99,7 @@ export default function CustomersPage() {
               ))}
               {!isLoading && customers.length === 0 && (
                 <Tr><Td colSpan={6}>
-                  <EmptyState icon="groups" title="No customers found" description="Add your first customer to start tracking sales, invoices and credit." action={<Button variant="primary" onClick={() => navigate('/app/crm/customers/new')}>Add Customer</Button>} />
+                  <EmptyState icon="groups" title="No customers found" description="Add your first customer to start tracking sales, invoices and credit." action={canCreate ? <Button variant="primary" onClick={() => navigate('/app/crm/customers/new')}>Add Customer</Button> : undefined} />
                 </Td></Tr>
               )}
               {customers.map((c) => (

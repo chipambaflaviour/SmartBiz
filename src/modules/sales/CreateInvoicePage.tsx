@@ -5,7 +5,7 @@ import { supabase } from '@/shared/lib/supabase'
 import { useAppStore } from '@/shared/stores/appStore'
 import { formatCurrency } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui/Button'
-import { Card } from '@/shared/components/ui/Display'
+import { BackButton, Card } from '@/shared/components/ui/Display'
 import { FormField, Input, Select, Textarea } from '@/shared/components/ui/FormElements'
 import { calculateVat, useTaxSettings } from '@/shared/hooks/useTaxSettings'
 
@@ -42,7 +42,7 @@ export default function CreateInvoicePage() {
   }, onSuccess: (data) => navigate(`/app/sales/invoices/${data.id}`) })
 
   return <div className="pb-10">
-    <div className="px-6 py-5 flex flex-wrap items-end justify-between gap-4"><div><p className="text-[13px] text-[#64748b]">Sales / Invoices / <span className="text-[#009b96]">New Invoice</span></p><h1 className="text-[28px] font-bold">Create New Invoice</h1></div><div className="flex gap-2"><Button variant="outline" loading={save.isPending} onClick={() => save.mutate('draft')}>Save as Draft</Button><Button loading={save.isPending} onClick={() => save.mutate('pending')}>Send Invoice</Button></div></div>
+    <div className="px-6 py-5 flex flex-wrap items-end justify-between gap-4"><div className="flex items-start gap-3"><BackButton href="/app/sales/invoices" label="Back to invoices"/><div><p className="text-[13px] text-[#64748b]">Sales / Invoices / <span className="text-[#009b96]">New Invoice</span></p><h1 className="text-[28px] font-bold">Create New Invoice</h1></div></div><div className="flex gap-2"><Button variant="outline" loading={save.isPending} onClick={() => save.mutate('draft')}>Save as Draft</Button><Button loading={save.isPending} onClick={() => save.mutate('pending')}>Send Invoice</Button></div></div>
     {!activeBranchId && <div role="alert" className="mx-6 mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Select a branch before creating an invoice. Invoices cannot be posted to the all-branches view.</div>}
     <div className="px-6 grid grid-cols-12 gap-5">
       <div className="col-span-12 xl:col-span-8 space-y-5">

@@ -20,6 +20,7 @@ const CreateInvoicePage = lazy(() => import('@/modules/sales/CreateInvoicePage')
 const ProductsPage = lazy(() => import('@/modules/inventory/ProductsPage'))
 const ProductDetailPage = lazy(() => import('@/modules/inventory/ProductDetailPage'))
 const ProductEditorPage = lazy(() => import('@/modules/inventory/ProductEditorPage'))
+const WriteOffHistoryPage = lazy(() => import('@/modules/inventory/WriteOffHistoryPage'))
 const StockTransferPage = lazy(() => import('@/modules/inventory/StockTransferPage'))
 const PurchasingPage = lazy(() => import('@/modules/purchasing/PurchasingPage'))
 const PurchaseOrderDetailPage = lazy(() => import('@/modules/purchasing/PurchaseOrderDetailPage'))
@@ -34,6 +35,9 @@ const ApprovalsInboxPage = lazy(() => import('@/modules/approvals/ApprovalsInbox
 const ModulesPage = lazy(() => import('@/modules/settings/ModulesPage'))
 const ControlCenterPage = lazy(() => import('@/modules/platform/ControlCenterPage'))
 const VatSummaryPage = lazy(() => import('@/modules/finance/VatSummaryPage'))
+const PlatformAuditPage = lazy(() => import('@/modules/platform/PlatformAuditPage'))
+const PlatformSecurityPage = lazy(() => import('@/modules/platform/PlatformSecurityPage'))
+const PlatformSubscriptionsPage = lazy(() => import('@/modules/platform/PlatformSubscriptionsPage'))
 
 function PageLoader() {
   return (
@@ -117,6 +121,7 @@ export const router = createBrowserRouter([
             element: isDemoMode ? <ComingSoonPage module="Product Detail" /> : <Suspense fallback={<PageLoader />}><ProductDetailPage /></Suspense>,
           },
           { path: 'products/:id/edit', element: <Suspense fallback={<PageLoader />}><ProductEditorPage /></Suspense> },
+          { path: 'write-offs', element: <Suspense fallback={<PageLoader />}><WriteOffHistoryPage /></Suspense> },
           {
             path: 'warehouses',
             element: <Suspense fallback={<PageLoader />}><ComingSoonPage module="Warehouses" /></Suspense>,
@@ -138,7 +143,7 @@ export const router = createBrowserRouter([
           { path: 'customers/new', element: <Suspense fallback={<PageLoader />}><CustomerEditorPage /></Suspense> },
           {
             path: 'customers/:id',
-            element: isDemoMode ? <ComingSoonPage module="Customer Profile" /> : <Suspense fallback={<PageLoader />}><CustomerProfilePage /></Suspense>,
+            element: <Suspense fallback={<PageLoader />}><CustomerProfilePage /></Suspense>,
           },
           { path: 'customers/:id/edit', element: <Suspense fallback={<PageLoader />}><CustomerEditorPage /></Suspense> },
         ],
@@ -203,6 +208,10 @@ export const router = createBrowserRouter([
             element: <Suspense fallback={<PageLoader />}><ModulesPage /></Suspense>,
           },
           {
+            path: 'access-preview',
+            element: <Navigate to="/app/dashboard" replace />,
+          },
+          {
             path: 'roles',
             element: <Suspense fallback={<PageLoader />}><ComingSoonPage module="Roles & Permissions" /></Suspense>,
           },
@@ -225,9 +234,9 @@ export const router = createBrowserRouter([
       { path: 'workflow', element: <ComingSoonPage module="Workflow Automation" /> },
       { path: 'ai', element: <ComingSoonPage module="AI & Analytics" /> },
       { path: 'marketplace', element: <ComingSoonPage module="Marketplace" /> },
-      { path: 'security', element: <ComingSoonPage module="Security Center" /> },
-      { path: 'audit', element: <ComingSoonPage module="Audit Logs" /> },
-      { path: 'subscription', element: <ComingSoonPage module="Subscription & Billing" /> },
+      { path: 'security', element: <Suspense fallback={<PageLoader />}><PlatformSecurityPage /></Suspense> },
+      { path: 'audit', element: <Suspense fallback={<PageLoader />}><PlatformAuditPage /></Suspense> },
+      { path: 'subscription', element: <Suspense fallback={<PageLoader />}><PlatformSubscriptionsPage /></Suspense> },
       { path: 'notifications', element: <ComingSoonPage module="Notifications" /> },
       { path: 'developer', element: <ComingSoonPage module="Developer Portal" /> },
       { path: 'control-center', element: <Suspense fallback={<PageLoader />}><ControlCenterPage /></Suspense> },

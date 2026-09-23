@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from '@/shared/lib/utils'
 import { Card, Skeleton, Badge, PageHeader } from '@/shared/components/ui/Display'
 import { Button } from '@/shared/components/ui/Button'
 import { isDemoMode } from '@/shared/lib/supabase'
+import { usePreviewPermission } from '@/shared/hooks/usePreviewPermission'
 
 // Recharts custom tooltip
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
@@ -27,6 +28,14 @@ export default function DashboardPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
   const activeBranchId = useAppStore((s) => s.activeBranchId)
   const currentUser = useAppStore((s) => s.currentUser)
+  const accessPreview = useAppStore((s) => s.accessPreview)
+  const canUsePos = usePreviewPermission('pos', 'view')
+  const canCreateSales = usePreviewPermission('pos', 'create')
+  const canUseInventory = usePreviewPermission('inventory', 'view')
+  const canUpdateInventory = usePreviewPermission('inventory', 'update')
+  const canCreateEmployees = usePreviewPermission('hr', 'create')
+  const canViewFinance = usePreviewPermission('finance', 'view')
+  const canViewApprovals = usePreviewPermission('approvals', 'view')
   const navigate = useNavigate()
 
   const greeting = () => {
@@ -200,7 +209,13 @@ export default function DashboardPage() {
     </Card>
   )
 
-  const userName = currentUser?.user_metadata?.full_name ?? currentUser?.email?.split('@')[0] ?? 'there'
+  const userName = accessPreview?.name ?? currentUser?.user_metadata?.full_name ?? currentUser?.email?.split('@')[0] ?? 'there'
+  const quickActions = [
+    canCreateSales && { label: 'New Sale', icon: 'point_of_sale', href: '/app/sales/pos' },
+    canCreateSales && { label: 'Create Invoice', icon: 'receipt_long', href: '/app/sales/invoices' },
+    canCreateEmployees && { label: 'Add Employee', icon: 'person_add', href: '/app/hr/employees/new' },
+    canUpdateInventory && { label: 'Stock Adjustment', icon: 'inventory', href: '/app/inventory/adjustments' },
+  ].filter(Boolean) as Array<{ label: string; icon: string; href: string }>
 
   return (
     <div className="min-h-full pb-10">
@@ -213,17 +228,17 @@ export default function DashboardPage() {
               <span className="material-symbols-outlined text-[18px]">calendar_today</span>
               Schedule
             </Button>
-            <Button variant="primary" size="md" onClick={() => navigate('/app/sales/pos')}>
+            {canCreateSales && <Button variant="primary" size="md" onClick={() => navigate('/app/sales/pos')}>
               <span className="material-symbols-outlined text-[18px]">add</span>
               New Sale
-            </Button>
+            </Button>}
           </>
         }
       />
 
       <div className="px-6 grid grid-cols-12 gap-5">
         {/* KPI Cards */}
-        <div className="col-span-12 md:col-span-6 xl:col-span-3">
+        {canViewFinance && <div className="col-span-12 md:col-span-6 xl:col-span-3">
           <StatCard
             label="Net Revenue (Month)"
             value={kpis ? formatCurrency(kpis.revenue) : '—'}
@@ -232,8 +247,8 @@ export default function DashboardPage() {
             badgeVariant="success"
             loading={kpisLoading}
           />
-        </div>
-        <div className="col-span-12 md:col-span-6 xl:col-span-2">
+        </div>}
+        {canViewFinance && <div className="col-span-12 md:col-span-6 xl:col-span-2">
           <StatCard
             label="VAT Collected"
             value={kpis ? formatCurrency(kpis.vatCollected) : '—'}
@@ -242,19 +257,19 @@ export default function DashboardPage() {
             badgeVariant="warning"
             loading={kpisLoading}
           />
-        </div>
+        </div>}
         <div className="col-span-12 md:col-span-6 xl:col-span-2">
           <StatCard label="Gross Sales" value={kpis ? formatCurrency(kpis.grossSales) : '—'} icon="shopping_cart" loading={kpisLoading} />
         </div>
-        <div className="col-span-12 md:col-span-6 xl:col-span-3">
+        {canViewFinance && <div className="col-span-12 md:col-span-6 xl:col-span-3">
           <StatCard
             label="Outstanding Receivables"
             value={kpis ? formatCurrency(kpis.outstanding) : '—'}
             icon="account_balance"
             loading={kpisLoading}
           />
-        </div>
-        <div className="col-span-12 md:col-span-6 xl:col-span-2">
+        </div>}
+        {canViewApprovals && <div className="col-span-12 md:col-span-6 xl:col-span-2">
           <StatCard
             label="Pending Approvals"
             value={kpis ? String(kpis.pendingApprovals) : '—'}
@@ -263,10 +278,10 @@ export default function DashboardPage() {
             badgeVariant="warning"
             loading={kpisLoading}
           />
-        </div>
+        </div>}
 
         {/* Revenue Chart */}
-        <div className="col-span-12 lg:col-span-8">
+        {canViewFinance && <div className="col-span-12 lg:col-span-8">
           <Card noPadding>
             <div className="flex items-center justify-between p-5 border-b border-[#e5eeff]">
               <div>
@@ -298,20 +313,15 @@ export default function DashboardPage() {
               )}
             </div>
           </Card>
-        </div>
+        </div>}
 
         {/* Right column */}
         <div className="col-span-12 lg:col-span-4 space-y-5">
           {/* Quick Actions */}
-          <Card>
+          {quickActions.length > 0 && <Card>
             <h3 className="text-[16px] font-semibold text-[#0b1c30] mb-3">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'New Sale', icon: 'point_of_sale', href: '/app/sales/pos' },
-                { label: 'Create Invoice', icon: 'receipt_long', href: '/app/sales/invoices' },
-                { label: 'Add Employee', icon: 'person_add', href: '/app/hr/employees' },
-                { label: 'Stock Adjustment', icon: 'inventory', href: '/app/inventory/adjustments' },
-              ].map((a) => (
+              {quickActions.map((a) => (
                 <button
                   key={a.label}
                   onClick={() => navigate(a.href)}
@@ -322,10 +332,10 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-          </Card>
+          </Card>}
 
           {/* Pending Approvals */}
-          <Card>
+          {canViewApprovals && <Card>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[16px] font-semibold text-[#0b1c30]">Pending Approvals</h3>
               {(kpis?.pendingApprovals ?? 0) > 0 && (
@@ -353,11 +363,11 @@ export default function DashboardPage() {
             >
               View all approvals
             </button>
-          </Card>
+          </Card>}
         </div>
 
         {/* Recent Activity */}
-        <div className="col-span-12">
+        {canUsePos && <div className="col-span-12">
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[16px] font-semibold text-[#0b1c30]">Recent Sales</h3>
@@ -389,10 +399,10 @@ export default function DashboardPage() {
               ))}
             </div>
           </Card>
-        </div>
+        </div>}
 
         {/* Low stock alert */}
-        {(kpis?.lowStockCount ?? 0) > 0 && (
+        {canUseInventory && (kpis?.lowStockCount ?? 0) > 0 && (
           <div className="col-span-12">
             <div className="flex items-center gap-3 p-4 bg-[#fef3c7] border border-[#fde68a] rounded-xl">
               <span className="material-symbols-outlined text-[#d97706] text-[22px]">warning</span>

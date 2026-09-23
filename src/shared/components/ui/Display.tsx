@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { cn, getInitials, avatarColor } from '@/shared/lib/utils'
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
@@ -227,12 +228,45 @@ interface PageHeaderProps {
   subtitle?: string
   breadcrumb?: Array<{ label: string; href?: string }>
   actions?: React.ReactNode
+  showBack?: boolean
+  backHref?: string
 }
 
-export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderProps) {
+interface BackButtonProps {
+  href?: string
+  label?: string
+  className?: string
+}
+
+export function BackButton({ href, label = 'Go back to previous page', className }: BackButtonProps) {
+  const navigate = useNavigate()
+  const goBack = () => {
+    if (href) navigate(href)
+    else if (window.history.length > 1) navigate(-1)
+    else navigate('/app/dashboard')
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={goBack}
+      aria-label={label}
+      title={label}
+      className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#bacac8] bg-white text-[#3b4948] transition-colors hover:bg-[#e8f7f6] hover:text-[#006a67] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00CEC8]', className)}
+    >
+      <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+    </button>
+  )
+}
+
+export function PageHeader({ title, subtitle, breadcrumb, actions, showBack = true, backHref }: PageHeaderProps) {
   return (
     <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-      <div>
+      <div className="flex min-w-0 items-start gap-2 sm:gap-3">
+        {showBack && (
+          <BackButton href={backHref} className="mt-5 sm:mt-6" />
+        )}
+        <div className="min-w-0">
         {breadcrumb && breadcrumb.length > 0 && (
           <nav className="flex items-center gap-1 text-[12px] text-[#6b7a79] mb-1">
             {breadcrumb.map((crumb, i) => (
@@ -249,6 +283,7 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
         )}
         <h1 className="text-[32px] font-semibold leading-[40px] tracking-tight text-[#0b1c30]">{title}</h1>
         {subtitle && <p className="text-[14px] text-[#6b7a79] mt-0.5">{subtitle}</p>}
+        </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 shrink-0 sm:ml-4 w-full sm:w-auto">{actions}</div>}
     </div>

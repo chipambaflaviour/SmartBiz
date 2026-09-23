@@ -6,6 +6,7 @@ import { supabase, isDemoMode } from '@/shared/lib/supabase'
 import { SMARTBIZ_MODULES } from '@/shared/lib/blueprint'
 import { Logo, LogoMark } from '@/shared/components/Logo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { EmployeeProfileSwitcher } from './EmployeeProfileSwitcher'
 
 interface NavItem {
   key: string
@@ -44,9 +45,10 @@ export function Sidebar() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
   const userId = useAppStore((s) => s.currentUser?.id)
   const isPlatformAdmin = useAppStore((s) => s.isPlatformAdmin)
+  const accessPreview = useAppStore((s) => s.accessPreview)
   const { data: membershipRole } = useQuery({ queryKey: ['current-membership-role', orgId, userId], queryFn: async () => { if (isDemoMode) return 'owner'; const { data } = await supabase.from('user_organization').select('role').eq('organization_id', orgId!).eq('user_id', userId!).eq('is_active', true).maybeSingle(); return data?.role ?? 'member' }, enabled: !!orgId && !!userId })
-  const canAdministerOrg = isPlatformAdmin || membershipRole === 'owner' || membershipRole === 'admin'
-  const platformBackoffice = isPlatformAdmin && !orgId
+  const canAdministerOrg = !accessPreview && (isPlatformAdmin || membershipRole === 'owner' || membershipRole === 'admin')
+  const platformBackoffice = isPlatformAdmin && !orgId && !accessPreview
 
   const isModuleEnabled = (key: string) => {
     if (!key) return true
@@ -101,6 +103,7 @@ export function Sidebar() {
               {!compact && <span>{item.label}</span>}
             </NavLink>))}
             {group === 'Finance' && isModuleEnabled('finance') && <NavLink to="/app/finance/vat-summary" onClick={() => setMobileOpen(false)} className={({isActive})=>cn('flex items-center gap-2.5 px-2 py-2 rounded-lg text-[14px] transition-colors duration-150',isActive?'bg-[#00CEC8]/15 text-[#6df4ed] font-semibold ring-1 ring-[#00CEC8]/20':'text-slate-400 hover:bg-white/[.06] hover:text-white')}><span className="material-symbols-outlined text-[20px]">receipt_long</span>{!compact&&<span>VAT Summary</span>}</NavLink>}
+            {group === 'Operate' && isModuleEnabled('inventory') && <NavLink to="/app/inventory/write-offs" onClick={() => setMobileOpen(false)} className={({isActive})=>cn('flex items-center gap-2.5 px-2 py-2 rounded-lg text-[14px] transition-colors duration-150',isActive?'bg-[#00CEC8]/15 text-[#6df4ed] font-semibold ring-1 ring-[#00CEC8]/20':'text-slate-400 hover:bg-white/[.06] hover:text-white')}><span className="material-symbols-outlined text-[20px]">inventory</span>{!compact&&<span>Stock Write-offs</span>}</NavLink>}
           </div>
         })}
         {!compact && modules && enabledCount === 0 && (
@@ -117,14 +120,14 @@ export function Sidebar() {
             )}
           </div>
         )}
-        {isPlatformAdmin && orgId && <button
+        {isPlatformAdmin && orgId && !accessPreview && <button
           onClick={() => { useAppStore.getState().setActiveOrganizationId(null); useAppStore.getState().setActiveBranchId(null); queryClient.clear(); navigate('/app/control-center'); setMobileOpen(false) }}
           className="mt-3 w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-[14px] text-slate-400 hover:bg-white/[.06] hover:text-white"
         >
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           {!compact && <span>Back to Platform</span>}
         </button>}
-        {isPlatformAdmin && orgId && <NavLink
+        {isPlatformAdmin && orgId && !accessPreview && <NavLink
           to="/app/control-center"
           onClick={() => setMobileOpen(false)}
           className={({isActive})=>cn('mt-3 flex items-center gap-2.5 px-2 py-2 rounded-lg text-[14px]',isActive?'bg-[#00CEC8]/15 text-[#6df4ed] font-semibold':'text-slate-400 hover:bg-white/[.06] hover:text-white')}
@@ -155,6 +158,7 @@ export function Sidebar() {
             {!compact && <span>{item.label}</span>}
           </NavLink>
         ))}
+        {!platformBackoffice && canAdministerOrg && <EmployeeProfileSwitcher compact={compact} closeMobile={() => setMobileOpen(false)} />}
         <button
           onClick={handleSignOut}
           className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-[14px] text-slate-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"

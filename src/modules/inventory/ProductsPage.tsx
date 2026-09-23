@@ -8,6 +8,7 @@ import { Badge, PageHeader, Table, Thead, Th, Tr, Td, Skeleton, EmptyState, Avat
 import { Input, Select } from '@/shared/components/ui/FormElements'
 import { Button } from '@/shared/components/ui/Button'
 import { isDemoMode } from '@/shared/lib/supabase'; import { DEMO_PRODUCTS } from '@/shared/lib/demo'
+import { usePreviewPermission } from '@/shared/hooks/usePreviewPermission'
 
 export default function ProductsPage() {
   const orgId = useAppStore((s) => s.activeOrganizationId)
@@ -18,6 +19,7 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
+  const canCreate = usePreviewPermission('inventory', 'create')
 
   const { data: categories = [] } = useQuery({
     queryKey: ['product-categories', orgId],
@@ -88,10 +90,10 @@ export default function ProductsPage() {
               <span className="material-symbols-outlined text-[18px]">upload</span>
               Import CSV
             </Button>
-            <Button variant="primary" onClick={() => navigate('/app/inventory/products/new')}>
+            {canCreate && <Button variant="primary" onClick={() => navigate('/app/inventory/products/new')}>
               <span className="material-symbols-outlined text-[18px]">add</span>
               Add Product
-            </Button>
+            </Button>}
           </>
         }
       />

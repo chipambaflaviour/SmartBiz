@@ -52,6 +52,7 @@ export function ModuleGuard({ children }: { children: ReactNode }) {
   const isPlatformAdmin = useAppStore(s => s.isPlatformAdmin)
   const orgId = useAppStore(s => s.activeOrganizationId)
   const userId = useAppStore(s => s.currentUser?.id)
+  const accessPreview = useAppStore(s => s.accessPreview)
   const { data: modules, isLoading } = useOrganizationModules()
   const { data: membershipRole, isLoading: roleLoading } = useQuery({
     queryKey: ['route-membership-role', orgId, userId],
@@ -66,15 +67,24 @@ export function ModuleGuard({ children }: { children: ReactNode }) {
   const required = requiredModuleFor(pathname)
   const isControlCenter = pathname === '/app/control-center'
   const isOrganizationSettings = pathname.startsWith('/app/settings')
-  const canAdministerOrganization = isPlatformAdmin || membershipRole === 'owner' || membershipRole === 'admin'
+  const canAdministerOrganization = !accessPreview && (isPlatformAdmin || membershipRole === 'owner' || membershipRole === 'admin')
 
-  if (isControlCenter && !isPlatformAdmin) return <AccessDenied title="Platform administrator access required" onBack={() => navigate('/app/dashboard')} />
+  if (isControlCenter && (!isPlatformAdmin || accessPreview)) return <AccessDenied title="Platform administrator access required" onBack={() => navigate('/app/dashboard')} />
   if (isOrganizationSettings) {
     if (roleLoading && !isPlatformAdmin) return <div className="flex h-64 items-center justify-center"><Spinner size={28} /></div>
     if (!canAdministerOrganization) return <AccessDenied title="Organization administrator access required" onBack={() => navigate('/app/dashboard')} />
     return <>{children}</>
   }
-  if (!required || isPlatformAdmin) return <>{children}</>
+  if (accessPreview && required) {
+    const permission = accessPreview.modules.find(module => module.moduleKey === required)
+    if (!permission?.canView) return <AccessDenied title={`You don't have access to ${SMARTBIZ_MODULES.find(module => module.key === required)?.label ?? required}`} onBack={() => navigate('/app/dashboard')} />
+    const creating = /\/(new|create)$/.test(pathname)
+    const editing = /\/edit$/.test(pathname)
+    if (creating && !permission.canCreate) return <AccessDenied title="Create permission required" description={`${accessPreview.name} can view this module but cannot create records.`} onBack={() => navigate(-1)} />
+    const canRequestProductChange = required === 'inventory' && /^\/app\/inventory\/products\/[^/]+\/edit$/.test(pathname)
+    if (editing && !permission.canUpdate && !canRequestProductChange) return <AccessDenied title="Edit permission required" description={`${accessPreview.name} can view this module but cannot edit records.`} onBack={() => navigate(-1)} />
+  }
+  if (!required || (isPlatformAdmin && !accessPreview)) return <>{children}</>
 
   if (isLoading || !modules) {
     return <div className="flex h-64 items-center justify-center"><Spinner size={28} /></div>

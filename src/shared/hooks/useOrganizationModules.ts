@@ -14,13 +14,23 @@ export function useOrganizationModules() {
   const userId = useAppStore((s) => s.currentUser?.id)
   const isPlatformAdmin = useAppStore((s) => s.isPlatformAdmin)
   const branchId = useAppStore((s) => s.activeBranchId)
+  const accessPreview = useAppStore((s) => s.accessPreview)
 
   return useQuery({
     // Keyed by user too: switching accounts in the same browser must never reuse another user's access list
-    queryKey: ['org-modules', orgId, userId, branchId],
+    queryKey: ['org-modules', orgId, userId, branchId, accessPreview?.userId],
     queryFn: async () => {
-      if (isDemoMode) return DEMO_MODULES
+      if (isDemoMode && !accessPreview) return DEMO_MODULES
       if (!orgId) return []
+      if (accessPreview) {
+        const allowed = new Set(accessPreview.modules.filter(module => module.canView).map(module => module.moduleKey))
+        const { data, error } = await supabase.from('organization_module').select('module_key, is_enabled').eq('organization_id', orgId)
+        if (error) throw error
+        return (data ?? []).map((row: { module_key: string; is_enabled: boolean }) => ({
+          moduleKey: row.module_key as ModuleKey,
+          isEnabled: row.is_enabled && (row.module_key === 'dashboard' || allowed.has(row.module_key)),
+        }))
+      }
       const [{ data, error }, { data: membership }, { data: userAccess }, { data: branchAccess, error: branchAccessError }] = await Promise.all([
         supabase.from('organization_module').select('module_key, is_enabled').eq('organization_id', orgId),
         supabase.from('user_organization').select('role').eq('organization_id', orgId).eq('user_id', userId!).eq('is_active', true).maybeSingle(),

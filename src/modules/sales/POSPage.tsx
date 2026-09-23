@@ -63,11 +63,11 @@ export default function POSPage() {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', orgId, activeBranchId],
     queryFn: async () => {
-      if (isDemoMode) return DEMO_PRODUCTS
+      if (isDemoMode) return DEMO_PRODUCTS.map(product => ({ ...product, base_unit: 'piece', pack_unit: null as string | null, units_per_pack: null as number | null, pack_price: null as number | null }))
       if (!orgId) return []
       const { data } = await supabase
         .from('product')
-        .select('id, sku, name, unit_price, image_url, category_id, product_category(name), stock_level(id,quantity,warehouse(branch_id))')
+        .select('id, sku, name, unit_price, image_url, category_id, base_unit, pack_unit, units_per_pack, pack_price, product_category(name), stock_level(id,quantity,warehouse(branch_id))')
         .eq('organization_id', orgId)
         .eq('is_active', true)
         .is('deleted_at', null)
@@ -137,6 +137,8 @@ export default function POSPage() {
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
+          saleUnit: i.saleUnit,
+          unitMultiplier: i.unitMultiplier,
           discountAmount: 0,
           lineTotal: i.unitPrice * i.quantity,
         })),
@@ -188,6 +190,8 @@ export default function POSPage() {
           product_id: i.productId,
           quantity: i.quantity,
           unit_price: i.unitPrice,
+          sale_unit: i.saleUnit,
+          unit_multiplier: i.unitMultiplier,
           discount_amount: 0,
           line_total: i.unitPrice * i.quantity,
         }))
@@ -213,7 +217,7 @@ export default function POSPage() {
         const levels = ((product?.stock_level ?? []) as unknown as BranchStockLevel[])
           .filter((level) => branchIdFor(level) === activeBranchId)
           .sort((a, b) => b.quantity - a.quantity)
-        let remaining = item.quantity
+        let remaining = item.quantity * item.unitMultiplier
         for (const level of levels) {
           if (remaining <= 0) break
           const deduction = Math.min(level.quantity, remaining)
@@ -281,7 +285,7 @@ export default function POSPage() {
 
   /** Units still available to sell right now: on-hand stock minus what is already in the cart. */
   function getRemaining(product: ProductRow): number {
-    const inCart = items.find((i) => i.productId === product.id)?.quantity ?? 0
+    const inCart = items.filter((i) => i.productId === product.id).reduce((sum, item) => sum + item.quantity * item.unitMultiplier, 0)
     return Math.max(0, getStockQty(product) - inCart)
   }
 
@@ -293,9 +297,10 @@ export default function POSPage() {
   }
 
   /** Cap a cart quantity at the product's on-hand stock. */
-  function stockFor(productId: string): number {
-    const product = products.find((p) => p.id === productId)
-    return product ? getStockQty(product) : Number.POSITIVE_INFINITY
+  function stockFor(cartKey: string): number {
+    const item = items.find(candidate => candidate.cartKey === cartKey)
+    const product = products.find((p) => p.id === item?.productId)
+    return product && item ? Math.floor(getStockQty(product) / item.unitMultiplier) : Number.POSITIVE_INFINITY
   }
 
   return (
@@ -359,17 +364,9 @@ export default function POSPage() {
               const remaining = getRemaining(product)
               const outOfStock = remaining === 0
               return (
-                <button
+                <div
                   key={product.id}
-                  disabled={outOfStock}
                   title={onHand === 0 ? 'No stock on hand' : remaining === 0 ? 'All available units are already in the cart' : `${remaining} available`}
-                  onClick={() => addItem({
-                    productId: product.id,
-                    sku: product.sku,
-                    name: product.name,
-                    unitPrice: product.unit_price,
-                    imageUrl: product.image_url,
-                  })}
                   className={cn(
                     'relative text-left bg-white border border-[#bacac8] rounded-xl overflow-hidden',
                     'hover:border-[#006a67] hover:shadow-sm transition-all',
@@ -387,14 +384,10 @@ export default function POSPage() {
                   <div className="p-3">
                     <p className="text-[13px] font-semibold text-[#0b1c30] line-clamp-1">{product.name}</p>
                     <p className="text-[11px] text-[#6b7a79] mb-1">SKU: {product.sku}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[14px] font-bold text-[#006a67]">{formatCurrency(product.unit_price)}</span>
-                      <div className="w-6 h-6 rounded-full border border-[#bacac8] flex items-center justify-center text-[#6b7a79] hover:border-[#006a67] hover:text-[#006a67] transition-colors">
-                        <span className="material-symbols-outlined text-[16px]">add</span>
-                      </div>
-                    </div>
+                    <button disabled={outOfStock} onClick={() => addItem({ cartKey: `${product.id}:base`, productId: product.id, sku: product.sku, name: product.name, unitPrice: product.unit_price, imageUrl: product.image_url, saleUnit: product.base_unit ?? 'piece', unitMultiplier: 1 })} className="mt-1 flex w-full items-center justify-between rounded-lg border border-[#d7e0ed] px-2 py-1.5 hover:border-[#006a67] disabled:opacity-40"><span className="text-[11px] font-medium capitalize">1 {product.base_unit ?? 'piece'}</span><span className="text-[13px] font-bold text-[#006a67]">{formatCurrency(product.unit_price)}</span></button>
+                    {product.pack_unit && Number(product.units_per_pack) > 1 && <button disabled={remaining < Number(product.units_per_pack)} onClick={() => addItem({ cartKey: `${product.id}:pack`, productId: product.id, sku: product.sku, name: `${product.name} (${product.pack_unit})`, unitPrice: Number(product.pack_price ?? product.unit_price * Number(product.units_per_pack)), imageUrl: product.image_url, saleUnit: product.pack_unit, unitMultiplier: Number(product.units_per_pack) })} className="mt-1 flex w-full items-center justify-between rounded-lg border border-[#9ce8e4] bg-[#effcfb] px-2 py-1.5 hover:border-[#006a67] disabled:opacity-40"><span className="text-[11px] font-medium capitalize">1 {product.pack_unit} · {product.units_per_pack} {product.base_unit}s</span><span className="text-[13px] font-bold text-[#006a67]">{formatCurrency(Number(product.pack_price ?? product.unit_price * Number(product.units_per_pack)))}</span></button>}
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
@@ -423,7 +416,7 @@ export default function POSPage() {
             </div>
           )}
           {items.map((item) => (
-            <div key={item.productId} className="flex items-center gap-3 px-5 py-3 border-b border-[#f8f9ff]">
+            <div key={item.cartKey} className="flex items-center gap-3 px-5 py-3 border-b border-[#f8f9ff]">
               <div className="w-10 h-10 rounded-lg bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-center shrink-0 overflow-hidden">
                 {item.imageUrl
                   ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
@@ -432,7 +425,7 @@ export default function POSPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-[#0b1c30] truncate">{item.name}</p>
-                <p className="text-[11px] text-[#6b7a79]">{item.sku}</p>
+                <p className="text-[11px] text-[#6b7a79]">{item.sku} · {item.saleUnit}{item.unitMultiplier > 1 ? ` (${item.unitMultiplier} base units)` : ''}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <p className="text-[13px] font-semibold text-[#006a67]">
@@ -440,21 +433,21 @@ export default function POSPage() {
                 </p>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => updateQty(item.productId, item.quantity - 1)}
+                    onClick={() => updateQty(item.cartKey, item.quantity - 1)}
                     className="w-6 h-6 rounded border border-[#bacac8] flex items-center justify-center text-[#6b7a79] hover:bg-[#e5eeff] transition-colors"
                   >
                     <span className="material-symbols-outlined text-[14px]">remove</span>
                   </button>
                   <span className="w-8 text-center text-[13px] font-medium">{item.quantity}</span>
                   <button
-                    onClick={() => updateQty(item.productId, Math.min(item.quantity + 1, stockFor(item.productId)))}
-                    disabled={item.quantity >= stockFor(item.productId)}
-                    title={item.quantity >= stockFor(item.productId) ? 'No more stock available' : undefined}
+                    onClick={() => updateQty(item.cartKey, Math.min(item.quantity + 1, stockFor(item.cartKey)))}
+                    disabled={item.quantity >= stockFor(item.cartKey)}
+                    title={item.quantity >= stockFor(item.cartKey) ? 'No more stock available' : undefined}
                     className="w-6 h-6 rounded border border-[#bacac8] flex items-center justify-center text-[#6b7a79] hover:bg-[#e5eeff] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span className="material-symbols-outlined text-[14px]">add</span>
                   </button>
-                  <button onClick={() => removeItem(item.productId)} className="w-6 h-6 ml-1 flex items-center justify-center text-[#bacac8] hover:text-[#ba1a1a] transition-colors">
+                  <button onClick={() => removeItem(item.cartKey)} className="w-6 h-6 ml-1 flex items-center justify-center text-[#bacac8] hover:text-[#ba1a1a] transition-colors">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>

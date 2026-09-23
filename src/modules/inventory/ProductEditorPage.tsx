@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/shared/lib/supabase'
+import { isDemoMode, supabase } from '@/shared/lib/supabase'
 import { useAppStore } from '@/shared/stores/appStore'
 import { Button } from '@/shared/components/ui/Button'
 import { FormField, Input, Select, Textarea } from '@/shared/components/ui/FormElements'
@@ -19,6 +19,10 @@ interface ProductForm {
   reorder_level: string
   image_url: string
   is_active: boolean
+  base_unit: string
+  pack_unit: string
+  units_per_pack: string
+  pack_price: string
 }
 
 /** quantity on hand per warehouse id (string for controlled inputs) */
@@ -29,6 +33,7 @@ type FieldErrors = Partial<Record<keyof ProductForm, string>>
 const initial: ProductForm = {
   name: '', sku: '', barcode: '', category_id: '', description: '',
   unit_price: '', cost_price: '', reorder_level: '10', image_url: '', is_active: true,
+  base_unit: 'piece', pack_unit: '', units_per_pack: '', pack_price: '',
 }
 
 /** Suggest a SKU from the product name, e.g. "Coca-Cola 500ml" → "COC-500-4F2A" */
@@ -46,6 +51,8 @@ function validate(form: ProductForm, stock: StockMap): FieldErrors & { stock?: s
   const price = Number(form.unit_price)
   if (form.unit_price === '' || Number.isNaN(price) || price < 0) errors.unit_price = 'Enter a valid selling price'
   if (form.cost_price !== '' && (Number.isNaN(Number(form.cost_price)) || Number(form.cost_price) < 0)) errors.cost_price = 'Enter a valid cost price'
+  if (form.pack_unit && (!Number.isFinite(Number(form.units_per_pack)) || Number(form.units_per_pack) <= 1)) errors.units_per_pack = 'Enter how many base units are in one pack'
+  if (form.pack_unit && (!Number.isFinite(Number(form.pack_price)) || Number(form.pack_price) < 0)) errors.pack_price = 'Enter the selling price for one pack'
   const reorder = Number(form.reorder_level)
   if (form.reorder_level === '' || !Number.isInteger(reorder) || reorder < 0) errors.reorder_level = 'Enter a whole number'
   const badStock = Object.values(stock).some(v => v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0))
@@ -59,6 +66,7 @@ export default function ProductEditorPage() {
   const orgId = useAppStore(s => s.activeOrganizationId)
   const activeBranchId = useAppStore(s => s.activeBranchId)
   const currentUser = useAppStore(s => s.currentUser)
+  const accessPreview = useAppStore(s => s.accessPreview)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<ProductForm>(initial)
@@ -73,6 +81,31 @@ export default function ProductEditorPage() {
   const [submitError, setSubmitError] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [showNewCategory, setShowNewCategory] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [changeReason, setChangeReason] = useState('')
+
+  const { data: membershipRole = 'member', isLoading: roleLoading } = useQuery({
+    queryKey: ['product-editor-role', orgId, currentUser?.id],
+    queryFn: async () => {
+      if (isDemoMode) return 'owner'
+      const { data } = await supabase.from('user_organization').select('role').eq('organization_id', orgId!).eq('user_id', currentUser!.id).eq('is_active', true).maybeSingle()
+      return data?.role ?? 'member'
+    },
+    enabled: !!orgId && !!currentUser?.id,
+  })
+  const isPlatformAdmin = useAppStore(s => s.isPlatformAdmin)
+  const canAdministerProducts = accessPreview ? accessPreview.role === 'owner' || accessPreview.role === 'admin' : isPlatformAdmin || membershipRole === 'owner' || membershipRole === 'admin'
+  const effectiveRequesterId = accessPreview?.userId ?? currentUser?.id
+
+  const { data: approverId } = useQuery({
+    queryKey: ['product-approval-admin', orgId, currentUser?.id, isPlatformAdmin],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('user_organization').select('user_id').eq('organization_id', orgId!).eq('is_active', true).in('role', ['owner', 'admin']).limit(1).maybeSingle()
+      if (error) throw error
+      return data?.user_id ?? (isPlatformAdmin ? currentUser?.id : null) ?? null
+    },
+    enabled: editing && !!orgId && !canAdministerProducts,
+  })
 
   const set = <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => {
     setForm(f => ({ ...f, [key]: value }))
@@ -135,6 +168,9 @@ export default function ProductEditorPage() {
       cost_price: product.cost_price == null ? '' : String(product.cost_price),
       reorder_level: String(product.reorder_level ?? 10), image_url: product.image_url ?? '',
       is_active: product.is_active ?? true,
+      base_unit: product.base_unit ?? 'piece', pack_unit: product.pack_unit ?? '',
+      units_per_pack: product.units_per_pack == null ? '' : String(product.units_per_pack),
+      pack_price: product.pack_price == null ? '' : String(product.pack_price),
     })
   }, [product])
 
@@ -158,6 +194,18 @@ export default function ProductEditorPage() {
   const save = useMutation({
     mutationFn: async () => {
       if (!orgId) throw new Error('No organization selected')
+      if (editing && roleLoading) throw new Error('Your permissions are still loading. Try again in a moment.')
+      if (editing && !changeReason.trim()) throw new Error('Explain why this product needs to be changed.')
+      let imageUrl = form.image_url.trim() || null
+      if (imageFile) {
+        if (!imageFile.type.startsWith('image/')) throw new Error('Choose a valid image file.')
+        if (imageFile.size > 5 * 1024 * 1024) throw new Error('Product images must be 5 MB or smaller.')
+        const extension = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+        const path = `${orgId}/${id ?? crypto.randomUUID()}/${crypto.randomUUID()}.${extension}`
+        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, imageFile, { contentType: imageFile.type, upsert: false })
+        if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`)
+        imageUrl = supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl
+      }
       const payload = {
         organization_id: orgId,
         name: form.name.trim(),
@@ -168,10 +216,33 @@ export default function ProductEditorPage() {
         unit_price: Number(form.unit_price),
         cost_price: form.cost_price === '' ? null : Number(form.cost_price),
         reorder_level: Number(form.reorder_level),
-        image_url: form.image_url.trim() || null,
+        image_url: imageUrl,
         is_active: form.is_active,
+        base_unit: form.base_unit,
+        pack_unit: form.pack_unit || null,
+        units_per_pack: form.pack_unit ? Number(form.units_per_pack) : null,
+        pack_price: form.pack_unit ? Number(form.pack_price) : null,
         updated_by: currentUser?.id ?? null,
         updated_at: new Date().toISOString(),
+      }
+
+      if (editing && !canAdministerProducts) {
+        if (!approverId) throw new Error('No organization owner or administrator is available to approve this change.')
+        const { error } = await supabase.from('approval_request').insert({
+          organization_id: orgId,
+          module: 'inventory',
+          reference_type: 'product',
+          reference_id: id,
+          title: `Edit product: ${product?.name ?? form.name}`,
+          description: changeReason.trim(),
+          requester_id: effectiveRequesterId,
+          approver_id: approverId,
+          status: 'pending',
+          action: 'update',
+          requested_changes: payload,
+        })
+        if (error) throw error
+        return { productId: id!, approvalRequested: true }
       }
 
       const result = editing
@@ -214,15 +285,16 @@ export default function ProductEditorPage() {
           if (upsertError) throw new Error(`Product saved, but stock could not be updated: ${upsertError.message}`)
         }
       }
-      return result.data.id
+      if (editing) await supabase.from('audit_log').insert({ organization_id: orgId, user_id: currentUser?.id, module: 'inventory', action: 'PRODUCT_UPDATED', entity_type: 'product', entity_id: result.data.id, metadata: { reason: changeReason.trim() } })
+      return { productId: result.data.id, approvalRequested: false }
     },
-    onSuccess: (productId) => {
+    onSuccess: ({ productId, approvalRequested }) => {
       queryClient.invalidateQueries({ queryKey: ['products-list'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['product-detail', orgId, productId] })
       queryClient.invalidateQueries({ queryKey: ['product-stock', orgId, productId] })
       queryClient.invalidateQueries({ queryKey: ['warehouses', orgId] })
-      navigate(`/app/inventory/products/${productId}`)
+      navigate(`/app/inventory/products/${productId}`, { state: approvalRequested ? { notice: 'Your product change was sent to an administrator for approval.' } : undefined })
     },
     onError: (cause: Error) => setSubmitError(friendlyDbError(cause, 'products')),
   })
@@ -319,8 +391,12 @@ export default function ProductEditorPage() {
                   <Textarea placeholder="Optional notes shown on the product page" value={form.description} onChange={e => set('description', e.target.value)} />
                 </FormField>
 
-                <FormField label="Image URL" className="sm:col-span-2" hint="Paste a link to the product image.">
-                  <Input type="url" placeholder="https://…" value={form.image_url} onChange={e => set('image_url', e.target.value)} />
+                <FormField label="Product image (optional)" className="sm:col-span-2" hint="JPG, PNG, WebP or GIF. Maximum 5 MB.">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {(imageFile || form.image_url) && <img src={imageFile ? URL.createObjectURL(imageFile) : form.image_url} alt="Product preview" className="h-20 w-20 rounded-xl border border-[#d7e0ed] object-cover" />}
+                    <Input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => setImageFile(e.target.files?.[0] ?? null)} className="h-auto max-w-md py-2" />
+                    {(imageFile || form.image_url) && <Button type="button" variant="ghost" size="sm" onClick={() => { setImageFile(null); set('image_url', '') }}>Remove image</Button>}
+                  </div>
                 </FormField>
               </div>
             </Card>
@@ -343,6 +419,20 @@ export default function ProductEditorPage() {
                     )}
                   </div>
                 </FormField>
+              </div>
+            </Card>
+
+            <Card>
+              <h2 className="font-bold">Selling units and packaging</h2>
+              <p className="mt-1 text-xs text-[#6b7a79]">Track stock in the smallest unit, then optionally sell complete packs, boxes or bags. Example: bottle + pack of 30 bottles.</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <FormField label="Smallest stock unit" required hint="The unit deducted from stock for retail sales.">
+                  <Select value={form.base_unit} onChange={e => set('base_unit', e.target.value)}><option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option><option value="kg">Kilogram (kg)</option><option value="litre">Litre</option><option value="metre">Metre</option></Select>
+                </FormField>
+                <FormField label="Wholesale package" hint="Optional">
+                  <Select value={form.pack_unit} onChange={e => { set('pack_unit', e.target.value); if (!e.target.value) { set('units_per_pack', ''); set('pack_price', '') } }}><option value="">No package</option><option value="pack">Pack</option><option value="box">Box</option><option value="bag">Bag</option><option value="carton">Carton</option><option value="crate">Crate</option></Select>
+                </FormField>
+                {form.pack_unit && <><FormField label={`Units in one ${form.pack_unit}`} required error={errors.units_per_pack} hint={`Example: 30 ${form.base_unit}s`}><Input type="number" min="2" step="1" value={form.units_per_pack} error={!!errors.units_per_pack} onChange={e => set('units_per_pack', e.target.value)} /></FormField><FormField label={`${form.pack_unit} selling price (ZMW)`} required error={errors.pack_price}><Input type="number" min="0" step="0.01" value={form.pack_price} error={!!errors.pack_price} onChange={e => set('pack_price', e.target.value)} /></FormField></>}
               </div>
             </Card>
 
@@ -418,9 +508,11 @@ export default function ProductEditorPage() {
           </p>
         )}
 
+        {editing && <Card className="mt-5"><FormField label={canAdministerProducts ? 'Reason for editing' : 'Reason for approval request'} required hint={canAdministerProducts ? 'Saved in the audit log.' : 'The product will not change until an owner or administrator approves this request.'}><Textarea value={changeReason} onChange={e=>setChangeReason(e.target.value)} placeholder="Explain what needs to change and why" /></FormField></Card>}
+
         <div className="mt-5 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => navigate(backHref)}>Cancel</Button>
-          <Button type="submit" loading={save.isPending}>{editing ? 'Save changes' : 'Create product'}</Button>
+          <Button type="submit" loading={save.isPending || (editing && roleLoading)}>{editing ? canAdministerProducts ? 'Save changes' : 'Request approval' : 'Create product'}</Button>
         </div>
       </form>
     </div>

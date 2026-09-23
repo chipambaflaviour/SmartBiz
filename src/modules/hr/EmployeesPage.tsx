@@ -8,6 +8,7 @@ import { Badge, PageHeader, Table, Thead, Th, Tr, Td, Skeleton, EmptyState, Avat
 import { Input, Select } from '@/shared/components/ui/FormElements'
 import { Button } from '@/shared/components/ui/Button'
 import { isDemoMode } from '@/shared/lib/supabase'; import { DEMO_EMPLOYEES } from '@/shared/lib/demo'
+import { usePreviewPermission } from '@/shared/hooks/usePreviewPermission'
 
 const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'outline'> = {
   active: 'success', 'on-leave': 'warning', inactive: 'outline', terminated: 'danger',
@@ -27,6 +28,7 @@ export default function EmployeesPage() {
   const [deptFilter, setDeptFilter] = useState('all')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
+  const canCreate = usePreviewPermission('hr', 'create')
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', orgId],
@@ -39,7 +41,7 @@ export default function EmployeesPage() {
     enabled: !!orgId,
   })
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: employeesError } = useQuery({
     queryKey: ['employees', orgId, activeBranchId, deptFilter, page, search],
     queryFn: async () => {
       if (isDemoMode) { const q=search.toLowerCase(); const rows=DEMO_EMPLOYEES.filter(x=>!q||`${x.first_name} ${x.last_name} ${x.position}`.toLowerCase().includes(q)); return {data:rows,count:rows.length} }
@@ -47,7 +49,7 @@ export default function EmployeesPage() {
       let query = supabase
         .from('employee')
         .select(
-          'id, employee_id, first_name, last_name, email, avatar_url, position, employment_type, status, user_id, department(name)',
+          'id, employee_id, first_name, last_name, email, avatar_url, position, employment_type, status, user_id, department_id, branch_id',
           { count: 'exact' }
         )
         .eq('organization_id', orgId)
@@ -56,8 +58,14 @@ export default function EmployeesPage() {
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
 
       if (deptFilter !== 'all') query = query.eq('department_id', deptFilter)
-      if (activeBranchId) query = query.eq('branch_id', activeBranchId)
-      if (search) query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`)
+      // Employees created as "All / unassigned" belong to the organization rather
+      // than one branch. Keep them visible when a branch context is selected so a
+      // successful create never appears to vanish from the directory.
+      const safeSearch = search.replace(/[(),.%]/g, ' ').trim()
+      const nameSearch = safeSearch ? `or(first_name.ilike.%${safeSearch}%,last_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,employee_id.ilike.%${safeSearch}%,position.ilike.%${safeSearch}%)` : ''
+      if (activeBranchId && nameSearch) query = query.or(`and(branch_id.eq.${activeBranchId},${nameSearch}),and(branch_id.is.null,${nameSearch})`)
+      else if (activeBranchId) query = query.or(`branch_id.eq.${activeBranchId},branch_id.is.null`)
+      else if (nameSearch) query = query.or(nameSearch.slice(3, -1))
 
       const { data, count, error } = await query
       if (error) throw error
@@ -76,10 +84,10 @@ export default function EmployeesPage() {
         subtitle="Manage and view all personnel across your organization."
         breadcrumb={[{ label: 'HR' }, { label: 'Employees' }]}
         actions={
-          <Button variant="primary" onClick={() => navigate('/app/hr/employees/new')}>
+          canCreate ? <Button variant="primary" onClick={() => navigate('/app/hr/employees/new')}>
             <span className="material-symbols-outlined text-[18px]">person_add</span>
             Add Employee
-          </Button>
+          </Button> : undefined
         }
       />
 
@@ -126,14 +134,20 @@ export default function EmployeesPage() {
               {isLoading && Array.from({ length: 5 }).map((_, i) => (
                 <Tr key={i}>{Array.from({ length: 7 }).map((_, j) => <Td key={j}><Skeleton className="h-4 w-24" /></Td>)}</Tr>
               ))}
-              {!isLoading && employees.length === 0 && (
+              {!isLoading && employeesError && (
+                <Tr><Td colSpan={7}>
+                  <EmptyState icon="error" title="Could not load employees" description={(employeesError as Error).message} />
+                </Td></Tr>
+              )}
+              {!isLoading && !employeesError && employees.length === 0 && (
                 <Tr><Td colSpan={7}>
                   <EmptyState icon="badge" title="No employees found" description="Adjust filters or add a new employee." />
                 </Td></Tr>
               )}
               {employees.map((emp) => {
                 const fullName = `${emp.first_name} ${emp.last_name}`
-                const dept = emp.department as unknown as { name: string } | null
+                const employeeRecord = emp as typeof emp & { department_id?: string | null; department?: { name: string } | null }
+                const dept = employeeRecord.department ?? departments.find(item => item.id === employeeRecord.department_id)
                 return (
                   <Tr key={emp.id} onClick={() => navigate(`/app/hr/employees/${emp.id}`)}>
                     <Td>

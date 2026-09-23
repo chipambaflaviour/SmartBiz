@@ -6,6 +6,7 @@ import { useAppStore } from "@/shared/stores/appStore";
 import { Button } from "@/shared/components/ui/Button";
 import {
   Card,
+  BackButton,
   EmptyState,
   Table,
   Td,
@@ -60,11 +61,12 @@ export default function StockTransferPage() {
   });
   return (
     <div className="px-6 py-6">
-      <p className="text-[#64748b]">
+      <div className="flex items-start gap-3"><BackButton href="/app/inventory/products" label="Back to inventory"/><div><p className="text-[#64748b]">
         Inventory / Stock Transfers /{" "}
         <span className="text-[#009b96]">New Transfer</span>
       </p>
       <h1 className="text-[28px] font-bold mt-3">New Stock Transfer</h1>
+      </div></div>
       <Card className="grid md:grid-cols-4 gap-5 mt-5">
         <FormField label="Source Branch">
           <Select value={source} onChange={(e) => setSource(e.target.value)}>

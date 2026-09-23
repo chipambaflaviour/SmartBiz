@@ -29,12 +29,21 @@ export function useBranches() {
   const setActiveBranchId = useAppStore((state) => state.setActiveBranchId)
   const userId = useAppStore((state) => state.currentUser?.id)
   const isPlatformAdmin = useAppStore((state) => state.isPlatformAdmin)
+  const accessPreview = useAppStore((state) => state.accessPreview)
 
   const query = useQuery({
-    queryKey: ['workspace-branches', organizationId, userId, isPlatformAdmin],
+    queryKey: ['workspace-branches', organizationId, userId, isPlatformAdmin, accessPreview?.userId],
     queryFn: async (): Promise<BranchWorkspace> => {
       if (!organizationId || !userId) return { branches: [], canUseAllBranches: false }
       if (isDemoMode) return { branches: demoBranches, canUseAllBranches: true }
+
+      if (accessPreview) {
+        const { data, error } = await supabase.from('branch').select('id,organization_id,name,code,address,city,country,is_headquarters').eq('organization_id', organizationId).is('deleted_at', null).order('is_headquarters', { ascending: false }).order('name')
+        if (error) throw error
+        const allBranches = (data ?? []) as WorkspaceBranch[]
+        const unrestricted = accessPreview.role === 'owner' || accessPreview.role === 'admin'
+        return { branches: unrestricted ? allBranches : allBranches.filter(branch => accessPreview.branchIds.includes(branch.id)), canUseAllBranches: unrestricted }
+      }
 
       const [{ data: membership, error: membershipError }, { data: branches, error: branchError }, { data: assignments, error: assignmentError }] = await Promise.all([
         supabase

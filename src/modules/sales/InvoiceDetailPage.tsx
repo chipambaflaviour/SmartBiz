@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/shared/lib/supabase'
 import { useAppStore } from '@/shared/stores/appStore'
 import { formatCurrency, formatDate } from '@/shared/lib/utils'
-import { Badge, Card, EmptyState, Skeleton, Table, Td, Th, Thead, Tr } from '@/shared/components/ui/Display'
+import { BackButton, Badge, Card, EmptyState, Skeleton, Table, Td, Th, Thead, Tr } from '@/shared/components/ui/Display'
 import { Button } from '@/shared/components/ui/Button'
 
 export default function InvoiceDetailPage() {
@@ -43,9 +43,12 @@ export default function InvoiceDetailPage() {
 
   return <div className="pb-10">
     <div className="px-6 py-5 flex flex-wrap items-end justify-between gap-4">
-      <div>
+      <div className="flex items-start gap-3">
+        <BackButton href="/app/sales/invoices" label="Back to invoices" />
+        <div>
         <button className="text-[13px] text-[#6b7a79] hover:text-[#006a67]" onClick={() => navigate('/app/sales/invoices')}>Sales / Invoices / <span className="text-[#009b96]">{invoice.invoice_number}</span></button>
         <h1 className="text-[28px] leading-9 font-bold text-[#111827] mt-1">{invoice.invoice_number}</h1>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => window.print()}>Print</Button>
