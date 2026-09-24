@@ -75,9 +75,9 @@ CREATE POLICY "Owners can update their organizations"
   ON organization FOR UPDATE
   USING (user_has_role(id, 'owner'));
 
-CREATE POLICY "Authenticated users can create organizations"
-  ON organization FOR INSERT
-  WITH CHECK (auth.uid() IS NOT NULL);
+-- Client organizations are provisioned exclusively through the Platform
+-- Backoffice. The platform-admin policy is installed by platform_admin_api.sql
+-- and reinforced by the versioned hierarchy-hardening migration.
 
 -- ── Branch ───────────────────────────────────────────────────────────────────
 
@@ -125,9 +125,8 @@ CREATE POLICY "Owners can manage memberships"
   ON user_organization FOR ALL
   USING (user_has_role(organization_id, 'owner') OR user_has_role(organization_id, 'admin'));
 
-CREATE POLICY "Users can join orgs"
-  ON user_organization FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+-- Never allow self-service membership insertion. Memberships are created by
+-- platform administrators or authorized owners/admins through trusted flows.
 
 -- ── Employee ──────────────────────────────────────────────────────────────────
 

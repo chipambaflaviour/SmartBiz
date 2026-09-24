@@ -1,4 +1,5 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { CommandPalette } from '@/shared/components/CommandPalette'
@@ -16,7 +17,18 @@ export function AppShell() {
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen)
   const setMobileOpen = useUIStore((s) => s.setMobileSidebarOpen)
   const accessPreview = useAppStore((s) => s.accessPreview)
+  const activeOrganizationId = useAppStore((s) => s.activeOrganizationId)
+  const isPlatformAdmin = useAppStore((s) => s.isPlatformAdmin)
   const stopAccessPreview = useAppStore((s) => s.stopAccessPreview)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  function returnToPlatform() {
+    useAppStore.getState().setActiveOrganizationId(null)
+    useAppStore.getState().setActiveBranchId(null)
+    queryClient.clear()
+    navigate('/app/control-center')
+  }
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -43,6 +55,15 @@ export function AppShell() {
               <div><p className="text-sm font-bold text-amber-950">Workspace preview: {accessPreview.name}</p><p className="text-xs text-amber-800">{accessPreview.position ?? 'Employee'} · {accessPreview.role} · navigation and actions are filtered to this profile</p></div>
             </div>
             <button type="button" onClick={stopAccessPreview} className="rounded-lg border border-amber-400 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100">Exit employee view</button>
+          </div>
+        )}
+        {isPlatformAdmin && activeOrganizationId && !accessPreview && (
+          <div role="status" className="sticky top-[72px] z-30 flex flex-wrap items-center justify-between gap-3 border-b border-cyan-200 bg-cyan-50 px-4 py-3 shadow-sm sm:px-6">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-cyan-200 text-cyan-950"><span className="material-symbols-outlined text-[20px]">admin_panel_settings</span></span>
+              <div><p className="text-sm font-bold text-cyan-950">Platform administrator viewing a client workspace</p><p className="text-xs text-cyan-800">Your platform privileges remain active. Client owners can manage branches here, but cannot create other client organizations.</p></div>
+            </div>
+            <button type="button" onClick={returnToPlatform} className="rounded-lg border border-cyan-400 bg-white px-3 py-2 text-sm font-semibold text-cyan-950 hover:bg-cyan-100">Return to Platform Backoffice</button>
           </div>
         )}
         <ModuleGuard>
