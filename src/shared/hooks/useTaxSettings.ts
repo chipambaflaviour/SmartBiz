@@ -11,7 +11,7 @@ export type TaxSettings = {
 
 const DEFAULTS: TaxSettings = { vatEnabled: false, vatRate: 16, pricesIncludeVat: true, taxNumber: '' }
 
-function parseSettings(value: unknown): TaxSettings {
+export function parseSettings(value: unknown): TaxSettings {
   const settings = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
   const rate = Number(settings.vat_rate ?? DEFAULTS.vatRate)
   return {

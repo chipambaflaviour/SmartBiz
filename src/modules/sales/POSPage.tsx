@@ -14,9 +14,29 @@ import { calculateVat, useTaxSettings } from '@/shared/hooks/useTaxSettings'
 
 // UI keys -> values allowed by the sale.payment_method CHECK constraint
 // (blueprint_alignment.sql: 'cash','card','bank_transfer','mobile_money','credit','split')
-const PAYMENT_METHOD_DB: Record<string, 'cash' | 'card' | 'mobile_money' | 'credit'> = { cash: 'cash', card: 'card', mobile_money: 'mobile_money', credit: 'credit' }
+export const PAYMENT_METHOD_DB: Record<string, 'cash' | 'card' | 'mobile_money' | 'credit'> = { cash: 'cash', card: 'card', mobile_money: 'mobile_money', credit: 'credit' }
 
-function isNetworkError(error: { message?: string } | null | undefined) {
+/**
+ * Selling price for one pack. A stored pack_price of 0 means "never priced"
+ * (older rows saved a blank field as 0); `??` would let that ring up free, so
+ * fall back to the unit price whenever there is no positive pack price.
+ */
+export function packPriceFor(product: { pack_price?: number | string | null; unit_price: number | string; units_per_pack?: number | string | null }): number {
+  const stored = Number(product.pack_price)
+  if (Number.isFinite(stored) && stored > 0) return stored
+  return Number(product.unit_price) * Number(product.units_per_pack ?? 1)
+}
+
+/**
+ * Discount is a percentage. type="number" min/max does not stop a cashier typing
+ * 150, which would otherwise produce a negative sale total, so clamp it here.
+ */
+export function clampDiscount(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
+
+export function isNetworkError(error: { message?: string } | null | undefined) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true
   const msg = (error?.message ?? '').toLowerCase()
   return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')
@@ -385,7 +405,7 @@ export default function POSPage() {
                     <p className="text-[13px] font-semibold text-[#0b1c30] line-clamp-1">{product.name}</p>
                     <p className="text-[11px] text-[#6b7a79] mb-1">SKU: {product.sku}</p>
                     <button disabled={outOfStock} onClick={() => addItem({ cartKey: `${product.id}:base`, productId: product.id, sku: product.sku, name: product.name, unitPrice: product.unit_price, imageUrl: product.image_url, saleUnit: product.base_unit ?? 'piece', unitMultiplier: 1 })} className="mt-1 flex w-full items-center justify-between rounded-lg border border-[#d7e0ed] px-2 py-1.5 hover:border-[#006a67] disabled:opacity-40"><span className="text-[11px] font-medium capitalize">1 {product.base_unit ?? 'piece'}</span><span className="text-[13px] font-bold text-[#006a67]">{formatCurrency(product.unit_price)}</span></button>
-                    {product.pack_unit && Number(product.units_per_pack) > 1 && <button disabled={remaining < Number(product.units_per_pack)} onClick={() => addItem({ cartKey: `${product.id}:pack`, productId: product.id, sku: product.sku, name: `${product.name} (${product.pack_unit})`, unitPrice: Number(product.pack_price ?? product.unit_price * Number(product.units_per_pack)), imageUrl: product.image_url, saleUnit: product.pack_unit, unitMultiplier: Number(product.units_per_pack) })} className="mt-1 flex w-full items-center justify-between rounded-lg border border-[#9ce8e4] bg-[#effcfb] px-2 py-1.5 hover:border-[#006a67] disabled:opacity-40"><span className="text-[11px] font-medium capitalize">1 {product.pack_unit} · {product.units_per_pack} {product.base_unit}s</span><span className="text-[13px] font-bold text-[#006a67]">{formatCurrency(Number(product.pack_price ?? product.unit_price * Number(product.units_per_pack)))}</span></button>}
+                    {product.pack_unit && Number(product.units_per_pack) > 1 && <button disabled={remaining < Number(product.units_per_pack)} onClick={() => addItem({ cartKey: `${product.id}:pack`, productId: product.id, sku: product.sku, name: `${product.name} (${product.pack_unit})`, unitPrice: packPriceFor(product), imageUrl: product.image_url, saleUnit: product.pack_unit, unitMultiplier: Number(product.units_per_pack) })} className="mt-1 flex w-full items-center justify-between rounded-lg border border-[#9ce8e4] bg-[#effcfb] px-2 py-1.5 hover:border-[#006a67] disabled:opacity-40"><span className="text-[11px] font-medium capitalize">1 {product.pack_unit} · {product.units_per_pack} {product.base_unit}s</span><span className="text-[13px] font-bold text-[#006a67]">{formatCurrency(packPriceFor(product))}</span></button>}
                   </div>
                 </div>
               )
@@ -464,7 +484,7 @@ export default function POSPage() {
             <Input
               type="number" min={0} max={100}
               value={discount || ''}
-              onChange={(e) => setDiscount(Number(e.target.value))}
+              onChange={(e) => setDiscount(clampDiscount(Number(e.target.value)))}
               className="h-7 text-[12px]"
               placeholder="0"
             />

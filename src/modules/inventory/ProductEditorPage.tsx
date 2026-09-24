@@ -36,15 +36,15 @@ const initial: ProductForm = {
   base_unit: 'piece', pack_unit: '', units_per_pack: '', pack_price: '',
 }
 
-/** Suggest a SKU from the product name, e.g. "Coca-Cola 500ml" → "COC-500-4F2A" */
-function suggestSku(name: string) {
+/** Suggest a SKU from the product name, e.g. "Coca-Cola 500ml" → "COC-COL-4F2A" */
+export function suggestSku(name: string) {
   const words = name.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
   const base = words.slice(0, 2).map(w => w.slice(0, 3)).join('-') || 'PRD'
   const rand = Math.random().toString(16).slice(2, 6).toUpperCase()
   return `${base}-${rand}`
 }
 
-function validate(form: ProductForm, stock: StockMap): FieldErrors & { stock?: string } {
+export function validate(form: ProductForm, stock: StockMap): FieldErrors & { stock?: string } {
   const errors: FieldErrors = {}
   if (!form.name.trim()) errors.name = 'Product name is required'
   if (!form.sku.trim()) errors.sku = 'SKU is required'
@@ -52,7 +52,7 @@ function validate(form: ProductForm, stock: StockMap): FieldErrors & { stock?: s
   if (form.unit_price === '' || Number.isNaN(price) || price < 0) errors.unit_price = 'Enter a valid selling price'
   if (form.cost_price !== '' && (Number.isNaN(Number(form.cost_price)) || Number(form.cost_price) < 0)) errors.cost_price = 'Enter a valid cost price'
   if (form.pack_unit && (!Number.isFinite(Number(form.units_per_pack)) || Number(form.units_per_pack) <= 1)) errors.units_per_pack = 'Enter how many base units are in one pack'
-  if (form.pack_unit && (!Number.isFinite(Number(form.pack_price)) || Number(form.pack_price) < 0)) errors.pack_price = 'Enter the selling price for one pack'
+  if (form.pack_unit && (form.pack_price.trim() === '' || !Number.isFinite(Number(form.pack_price)) || Number(form.pack_price) <= 0)) errors.pack_price = 'Enter the selling price for one pack'
   const reorder = Number(form.reorder_level)
   if (form.reorder_level === '' || !Number.isInteger(reorder) || reorder < 0) errors.reorder_level = 'Enter a whole number'
   const badStock = Object.values(stock).some(v => v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0))
@@ -221,7 +221,7 @@ export default function ProductEditorPage() {
         base_unit: form.base_unit,
         pack_unit: form.pack_unit || null,
         units_per_pack: form.pack_unit ? Number(form.units_per_pack) : null,
-        pack_price: form.pack_unit ? Number(form.pack_price) : null,
+        pack_price: form.pack_unit && form.pack_price.trim() !== '' ? Number(form.pack_price) : null,
         updated_by: currentUser?.id ?? null,
         updated_at: new Date().toISOString(),
       }

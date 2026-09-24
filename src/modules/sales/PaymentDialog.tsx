@@ -69,7 +69,7 @@ const METHODS: Array<{ key: PaymentMethodKey; icon: string; label: string; hint:
 const MOBILE_PROVIDERS = ['MTN MoMo', 'Airtel Money', 'Zamtel Kwacha']
 
 /** Sensible "quick cash" buttons: exact, then the next round notes above the total. */
-function quickAmounts(total: number): number[] {
+export function quickAmounts(total: number): number[] {
   const steps = [10, 20, 50, 100, 200, 500, 1000]
   const out = new Set<number>([Math.ceil(total * 100) / 100])
   for (const step of steps) {

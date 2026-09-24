@@ -32,7 +32,7 @@ const SEGMENTS: Array<{ value: Segment; label: string; hint: string }> = [
   { value: 'vip', label: 'VIP', hint: 'Priority customer' },
 ]
 
-function validate(form: CustomerForm): FieldErrors {
+export function validate(form: CustomerForm): FieldErrors {
   const errors: FieldErrors = {}
   if (!form.name.trim()) errors.name = 'Customer name is required'
   if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Enter a valid email address'
